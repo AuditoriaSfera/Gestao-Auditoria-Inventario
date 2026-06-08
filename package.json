@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "worker:dev": "tsx src/server/jobs/worker.ts",
+    "worker:start": "tsx src/server/jobs/worker.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test"

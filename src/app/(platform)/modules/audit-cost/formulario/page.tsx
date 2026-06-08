@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, EmptyState, LoadingState, Btn } from '@/components/shared/module-page'
-import { formatDate } from '@/lib/utils'
+import { formatDate, formatCurrency } from '@/lib/utils'
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   NOT_SENT:  { label: 'Não enviado',  color: '#92400e', bg: '#fef3c7' },
@@ -17,10 +17,16 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
 
 const inp = { width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box' as const }
 
+function maskMoney(raw: string) {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  return (parseInt(digits) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })
+}
+
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+      <div style={{ background: 'white', borderRadius: '16px', width: '100%', maxWidth: '520px', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: 'white' }}>
           <h2 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>{title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }}>×</button>
@@ -48,6 +54,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function FormularioPage() {
   const [showGenerate, setShowGenerate] = useState(false)
   const [showCollaborator, setShowCollaborator] = useState(false)
+  const [showTrip, setShowTrip] = useState(false)
   const [selectedCollab, setSelectedCollab] = useState('')
   const [selectedTrip, setSelectedTrip] = useState('')
   const [generatedLink, setGeneratedLink] = useState<{ id: string; token: string; collaborator: { name: string; phone?: string | null } } | null>(null)
@@ -55,6 +62,14 @@ export default function FormularioPage() {
   const [collabRole, setCollabRole] = useState('')
   const [collabPhone, setCollabPhone] = useState('')
   const [collabEmail, setCollabEmail] = useState('')
+  // Trip (orçamento)
+  const [tripCollab, setTripCollab] = useState('')
+  const [tripReason, setTripReason] = useState('')
+  const [tripCity, setTripCity] = useState('')
+  const [tripState, setTripState] = useState('')
+  const [tripStart, setTripStart] = useState(new Date().toISOString().slice(0, 10))
+  const [tripEnd, setTripEnd] = useState(new Date().toISOString().slice(0, 10))
+  const [tripReleasedRaw, setTripReleasedRaw] = useState('')
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
 
@@ -88,6 +103,18 @@ export default function FormularioPage() {
     onError: e => setError(e.message),
   })
 
+  const createTripMut = trpc.auditTrips.create.useMutation({
+    onSuccess: (data: any) => {
+      utils.auditTrips.list.invalidate()
+      setShowTrip(false)
+      setSelectedTrip(data.id)           // já deixa selecionada no Gerar Link
+      setSelectedCollab(data.collaboratorId || tripCollab)
+      setTripReason(''); setTripCity(''); setTripState(''); setTripReleasedRaw(''); setTripCollab('')
+      setError('')
+    },
+    onError: e => setError(e.message),
+  })
+
   function getFormUrl(token: string) {
     return `${window.location.origin}/formulario/${token}`
   }
@@ -113,13 +140,35 @@ export default function FormularioPage() {
     generateMut.mutate({ collaboratorId: selectedCollab, tripId: selectedTrip || undefined })
   }
 
+  function handleCreateTrip() {
+    if (!tripCollab) { setError('Selecione o colaborador da viagem.'); return }
+    if (!tripReleasedRaw) { setError('Informe o valor destinado (orçamento) da viagem.'); return }
+    setError('')
+    createTripMut.mutate({
+      collaboratorId: tripCollab,
+      reason: tripReason || undefined,
+      city: tripCity || undefined,
+      state: tripState || undefined,
+      startDate: new Date(tripStart),
+      endDate: new Date(tripEnd),
+      releasedAmount: parseInt(tripReleasedRaw) / 100,
+    })
+  }
+
+  const allTrips = trips?.trips ?? []
+  const selectedTripObj = allTrips.find((t: any) => t.id === selectedTrip)
+
+  // Viagens visíveis no Gerar Link: se um colaborador foi escolhido, filtra pelas dele
+  const tripsForCollab = selectedCollab ? allTrips.filter((t: any) => t.collaboratorId === selectedCollab) : allTrips
+
   return (
     <ModulePage
       title="Formulário"
-      description="Gere e compartilhe links de formulário para colaboradores lançarem despesas pelo celular"
+      description="Gere links de formulário para os colaboradores lançarem despesas pelo celular. Cada resposta abate automaticamente do orçamento (viagem) destinado ao colaborador."
       actions={
         <div style={{ display: 'flex', gap: '8px' }}>
           <Btn variant="outline" onClick={() => setShowCollaborator(true)}>+ Colaborador</Btn>
+          <Btn variant="outline" onClick={() => { setShowTrip(true); setTripCollab(selectedCollab); setError('') }}>+ Viagem</Btn>
           <Btn onClick={() => { setShowGenerate(true); setGeneratedLink(null); setError('') }}>Gerar Link</Btn>
         </div>
       }
@@ -132,17 +181,41 @@ export default function FormularioPage() {
           {!generatedLink ? (
             <>
               <Field label="Colaborador *">
-                <select style={inp} value={selectedCollab} onChange={e => setSelectedCollab(e.target.value)}>
+                <select style={inp} value={selectedCollab} onChange={e => { setSelectedCollab(e.target.value); setSelectedTrip('') }}>
                   <option value="">Selecione...</option>
                   {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
                 </select>
               </Field>
-              <Field label="Viagem vinculada (opcional)">
-                <select style={inp} value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}>
-                  <option value="">Nenhuma</option>
-                  {(trips?.trips ?? []).map((t: any) => <option key={t.id} value={t.id}>{t.collaborator?.name} — {t.reason || t.city || t.id.slice(0, 8)}</option>)}
-                </select>
+
+              <Field label="Viagem / Orçamento vinculado" hint="A despesa respondida será abatida do saldo desta viagem.">
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <select style={{ ...inp, flex: 1 }} value={selectedTrip} onChange={e => setSelectedTrip(e.target.value)}>
+                    <option value="">Nenhuma (sem abatimento)</option>
+                    {tripsForCollab.map((t: any) => (
+                      <option key={t.id} value={t.id}>
+                        {t.collaborator?.name} — {t.reason || t.city || t.id.slice(0, 8)} ({formatCurrency(t.balance)} disp.)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => { setShowTrip(true); setTripCollab(selectedCollab); setError('') }}
+                    style={{ padding: '0 14px', borderRadius: '10px', border: '1.5px solid #2563eb', background: '#eff6ff', color: '#2563eb', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >+ Nova</button>
+                </div>
               </Field>
+
+              {/* Card de orçamento da viagem selecionada */}
+              {selectedTripObj && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#475569', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Orçamento da viagem</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                    <div><div style={{ fontSize: '11px', color: '#94a3b8' }}>Liberado</div><div style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(selectedTripObj.releasedAmount)}</div></div>
+                    <div><div style={{ fontSize: '11px', color: '#94a3b8' }}>Já gasto</div><div style={{ fontSize: '15px', fontWeight: '700', color: '#dc2626' }}>{formatCurrency(selectedTripObj.spentAmount)}</div></div>
+                    <div><div style={{ fontSize: '11px', color: '#94a3b8' }}>Saldo</div><div style={{ fontSize: '15px', fontWeight: '700', color: selectedTripObj.balance < 0 ? '#dc2626' : '#16a34a' }}>{formatCurrency(selectedTripObj.balance)}</div></div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                 <Btn variant="outline" onClick={() => setShowGenerate(false)}>Cancelar</Btn>
                 <Btn onClick={handleGenerate} disabled={generateMut.isPending}>{generateMut.isPending ? 'Gerando...' : 'Gerar Link'}</Btn>
@@ -176,6 +249,38 @@ export default function FormularioPage() {
         </Modal>
       )}
 
+      {/* Modal Nova Viagem (orçamento) */}
+      {showTrip && (
+        <Modal title="Nova Viagem / Orçamento" onClose={() => { setShowTrip(false); setError('') }}>
+          {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
+          <Field label="Colaborador *" hint="O orçamento será destinado a este colaborador.">
+            <select style={inp} value={tripCollab} onChange={e => setTripCollab(e.target.value)}>
+              <option value="">Selecione...</option>
+              {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
+            </select>
+          </Field>
+          <Field label="Motivo da Viagem"><input style={inp} value={tripReason} onChange={e => setTripReason(e.target.value)} placeholder="Ex: Inventário mensal" /></Field>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}><Field label="Cidade"><input style={inp} value={tripCity} onChange={e => setTripCity(e.target.value)} /></Field></div>
+            <div style={{ width: '90px' }}><Field label="UF"><input style={inp} value={tripState} onChange={e => setTripState(e.target.value)} placeholder="MG" maxLength={2} /></Field></div>
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}><Field label="Início *"><input style={inp} type="date" value={tripStart} onChange={e => setTripStart(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Fim *"><input style={inp} type="date" value={tripEnd} onChange={e => setTripEnd(e.target.value)} /></Field></div>
+          </div>
+          <Field label="Valor Destinado / Liberado (R$) *" hint="Total que o colaborador pode gastar nesta viagem.">
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '15px', fontWeight: '600' }}>R$</span>
+              <input style={{ ...inp, paddingLeft: '40px', fontSize: '18px', fontWeight: '700' }} inputMode="numeric" value={maskMoney(tripReleasedRaw)} onChange={e => setTripReleasedRaw(e.target.value.replace(/\D/g, ''))} placeholder="0,00" />
+            </div>
+          </Field>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Btn variant="outline" onClick={() => { setShowTrip(false); setError('') }}>Cancelar</Btn>
+            <Btn onClick={handleCreateTrip} disabled={createTripMut.isPending}>{createTripMut.isPending ? 'Salvando...' : 'Criar Viagem'}</Btn>
+          </div>
+        </Modal>
+      )}
+
       {/* Modal Novo Colaborador */}
       {showCollaborator && (
         <Modal title="Novo Colaborador" onClose={() => { setShowCollaborator(false); setError('') }}>
@@ -192,6 +297,41 @@ export default function FormularioPage() {
           </div>
         </Modal>
       )}
+
+      {/* Orçamentos por viagem — mostra o abatimento acontecendo */}
+      <DataCard title={`Orçamentos por Viagem (${allTrips.length})`}>
+        {!allTrips.length ? (
+          <EmptyState icon="🗺️" title="Nenhuma viagem cadastrada" description='Clique em "+ Viagem" para destinar um orçamento a um colaborador.' />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {allTrips.map((t: any) => {
+              const pct = t.releasedAmount > 0 ? Math.min(100, (t.spentAmount / t.releasedAmount) * 100) : 0
+              const over = t.spentAmount > t.releasedAmount
+              return (
+                <div key={t.id} style={{ border: `1.5px solid ${over ? '#fecaca' : '#e2e8f0'}`, borderRadius: '12px', padding: '14px', background: over ? '#fff5f5' : 'white' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{t.collaborator?.name ?? '—'}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>{t.reason || ''} {t.city ? `· ${t.city}${t.state ? '/' + t.state : ''}` : ''}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: over ? '#dc2626' : '#0f172a' }}>{formatCurrency(t.spentAmount)} <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '500' }}>/ {formatCurrency(t.releasedAmount)}</span></div>
+                      <div style={{ fontSize: '12px', fontWeight: '700', color: over ? '#dc2626' : '#16a34a' }}>
+                        {over ? `⚠️ Excedeu ${formatCurrency(Math.abs(t.balance))}` : `Saldo: ${formatCurrency(t.balance)}`}
+                      </div>
+                    </div>
+                  </div>
+                  {t.releasedAmount > 0 && (
+                    <div style={{ marginTop: '10px', background: '#f1f5f9', borderRadius: '5px', height: '8px' }}>
+                      <div style={{ background: over ? '#dc2626' : pct > 80 ? '#f59e0b' : '#22c55e', borderRadius: '5px', height: '8px', width: `${Math.min(100, pct)}%`, transition: 'width 0.5s' }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </DataCard>
 
       {/* Lista de links */}
       <DataCard title={`Links de Formulário (${links?.length ?? 0})`}>

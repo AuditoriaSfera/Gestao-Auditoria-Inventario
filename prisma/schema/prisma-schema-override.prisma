@@ -1,0 +1,15 @@
+// Este arquivo documenta os índices compostos únicos que o Prisma requer
+// para operações de upsert. Já estão incorporados no schema principal.
+//
+// Referências:
+// @@unique([storeId, date])             -> CdeDailyRecord
+// @@unique([noteNumber, destinationStoreId]) -> NoteTransit
+// @@unique([roundId, itemId])           -> AuditRoundAnswer
+// @@unique([layoutId, version])         -> ImportLayoutVersion
+// @@unique([module, name])              -> ImportLayout
+// @@unique([module, action, scope])     -> Permission
+// @@unique([userId, roleId])            -> UserRole
+// @@unique([roleId, permissionId])      -> RolePermission
+// @@unique([cycleId, version])          -> InventoryClosing, InventoryTeamKpi
+// @@unique([storeId, cycleNumber])      -> InventoryCycle
+// @@unique([module, type, criticality]) -> SlaConfig

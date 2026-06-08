@@ -1,0 +1,1660 @@
+// ============================================================
+// SCHEMA PRISMA — PLATAFORMA SFERA MULTIFRANQUIAS
+// Versão: 1.0.0
+// Estratégia: Soft delete, timestamps, created_by, audit trail
+// ============================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_ACTIVATION
+}
+
+enum StoreStatus {
+  ACTIVE
+  INACTIVE
+  CLOSED
+}
+
+enum PendingStatus {
+  OPEN
+  IN_ANALYSIS
+  WAITING_STORE
+  WAITING_AUDIT
+  RESOLVED_PENDING_VALIDATION
+  CLOSED
+  CANCELLED
+  EXPIRED
+  REOPENED
+}
+
+enum PendingCriticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PendingOrigin {
+  AUTOMATIC
+  MANUAL
+}
+
+enum ImportStatus {
+  UPLOADING
+  VALIDATING
+  STAGING
+  READY_TO_PUBLISH
+  PUBLISHING
+  PUBLISHED
+  PARTIALLY_PUBLISHED
+  FAILED
+  CANCELLED
+  ROLLED_BACK
+}
+
+enum StorageProvider {
+  LOCAL
+  S3
+  AZURE
+}
+
+enum ActivityAction {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  IMPORTED
+  EXPORTED
+  COMMENTED
+  ATTACHED
+  APPROVED
+  REJECTED
+  REOPENED
+  CLOSED
+  DELETED
+  RESTORED
+  REPROCESSED
+}
+
+enum NoteTransitStatus {
+  PENDING
+  IN_TRANSIT
+  RECEIVED
+  LATE
+  CANCELLED
+  DIVERGENT
+}
+
+enum AssetStatus {
+  ACTIVE
+  TRANSFERRED
+  MAINTENANCE
+  WRITTEN_OFF
+  LOST
+  DIVERGENT
+  UNDER_REVIEW
+}
+
+enum InventoryStatus {
+  AWAITING_IMPORT
+  IMPORTED
+  IN_ANALYSIS
+  IN_CLOSING
+  FINALIZED
+  REVISED
+  CANCELLED
+  REOPENED
+}
+
+enum AuditRoundStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ChecklistItemType {
+  YES_NO
+  SCORE
+  TEXT
+  MULTIPLE_CHOICE
+  PHOTO_REQUIRED
+}
+
+// ============================================================
+// CORE — AUTENTICAÇÃO E USUÁRIOS
+// ============================================================
+
+model User {
+  id                String     @id @default(cuid())
+  name              String
+  email             String     @unique
+  emailVerified     DateTime?
+  passwordHash      String?
+  status            UserStatus @default(PENDING_ACTIVATION)
+  avatarUrl         String?
+  phone             String?
+  document          String?    // CPF
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+  mustChangePassword Boolean   @default(false)
+  twoFactorEnabled  Boolean    @default(false)
+
+  // Relações
+  roles             UserRole[]
+  storeScopes       UserStoreScope[]
+  sessions          Session[]
+  accounts          Account[]
+
+  // Atividade
+  auditLogs         AuditLog[]
+  activityHistory   ActivityHistory[]
+  notifications     Notification[]
+  comments          Comment[]         @relation("CommentAuthor")
+  attachments       Attachment[]      @relation("AttachmentUploader")
+
+  // Pendências
+  pendingItems      PendingItem[]     @relation("PendingResponsible")
+  pendingInteractions PendingInteraction[]
+
+  // Módulos (criado_por)
+  importBatches     ImportBatch[]
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+  createdBy         String?
+  updatedBy         String?
+
+  @@index([email])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// CORE — PAPÉIS E PERMISSÕES (RBAC)
+// ============================================================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  label       String
+  description String?
+  isSystem    Boolean  @default(false)  // roles do sistema não podem ser excluídas
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  module      String   // cde, note-transit, write-offs, inventory, etc.
+  action      String   // view, create, edit, delete, import, export, approve, etc.
+  scope       String?  // all-stores, own-store, regional, group
+  label       String
+  description String?
+
+  roles       RolePermission[]
+
+  @@unique([module, action, scope])
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserStoreScope {
+  id         String  @id @default(cuid())
+  userId     String
+  storeId    String?
+  groupId    String?
+  regionId   String?
+  scopeAll   Boolean @default(false)  // acesso a todas as lojas
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store   Store?       @relation(fields: [storeId], references: [id])
+  group   StoreGroup?  @relation(fields: [groupId], references: [id])
+  region  Region?      @relation(fields: [regionId], references: [id])
+
+  @@unique([userId, storeId, groupId, regionId])
+  @@map("user_store_scopes")
+}
+
+// ============================================================
+// CORE — ORGANIZAÇÃO (LOJAS, GRUPOS, REGIONAIS)
+// ============================================================
+
+model Region {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  name        String
+  description String?
+  managerId   String?
+  isActive    Boolean     @default(true)
+
+  stores      Store[]
+  groups      StoreGroup[]
+  userScopes  UserStoreScope[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+
+  @@map("regions")
+}
+
+model StoreGroup {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  regionId    String?
+  isActive    Boolean  @default(true)
+
+  region     Region?              @relation(fields: [regionId], references: [id])
+  members    StoreGroupMember[]
+  userScopes UserStoreScope[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+  createdBy  String?
+
+  @@map("store_groups")
+}
+
+model StoreGroupMember {
+  id      String @id @default(cuid())
+  groupId String
+  storeId String
+
+  group Store      @relation("StoreGroupMemberGroup", fields: [groupId], references: [id])
+  store Store      @relation("StoreGroupMemberStore", fields: [storeId], references: [id])
+
+  @@unique([groupId, storeId])
+  @@map("store_group_members")
+}
+
+model Store {
+  id           String      @id @default(cuid())
+  code         String      @unique
+  name         String
+  tradeName    String?
+  cnpj         String?     @unique
+  regionId     String?
+  status       StoreStatus @default(ACTIVE)
+  address      String?
+  city         String?
+  state        String?
+  zipCode      String?
+  phone        String?
+  email        String?
+  managerId    String?
+  openedAt     DateTime?
+  closedAt     DateTime?
+  metadata     Json?       // campos extras por loja
+
+  region      Region?            @relation(fields: [regionId], references: [id])
+  groups      StoreGroupMember[] @relation("StoreGroupMemberStore")
+  groupsOwned StoreGroupMember[] @relation("StoreGroupMemberGroup")
+  userScopes  UserStoreScope[]
+
+  // Módulos
+  cdeRecords          CdeDailyRecord[]
+  noteTransits        NoteTransit[]
+  writeOffs           WriteOff[]
+  conferences         MerchandiseConference[]
+  auditRounds         AuditRound[]
+  assets              Asset[]
+  inventoryCycles     InventoryCycle[]
+  pendingItems        PendingItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+
+  @@index([code])
+  @@index([regionId])
+  @@index([status])
+  @@map("stores")
+}
+
+// ============================================================
+// CORE — CADASTROS MESTRES
+// ============================================================
+
+model ProductCategory {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  description String?
+  parentId    String?
+  isActive    Boolean   @default(true)
+
+  parent    ProductCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  ProductCategory[] @relation("CategoryHierarchy")
+  products  Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@map("product_categories")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String   @unique
+  barcode     String?
+  name        String
+  description String?
+  categoryId  String?
+  supplierId  String?
+  unit        String   @default("UN")
+  isActive    Boolean  @default(true)
+  metadata    Json?
+
+  category   ProductCategory? @relation(fields: [categoryId], references: [id])
+  supplier   Supplier?        @relation(fields: [supplierId], references: [id])
+  costs      ProductCost[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  @@index([sku])
+  @@index([barcode])
+  @@map("products")
+}
+
+model ProductCost {
+  id          String   @id @default(cuid())
+  productId   String
+  unitCost    Decimal  @db.Decimal(15, 4)
+  validFrom   DateTime
+  validUntil  DateTime?
+  createdBy   String?
+  source      String?  // manual, import, etc.
+
+  product Product @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, validFrom])
+  @@map("product_costs")
+}
+
+model Supplier {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  tradeName  String?
+  cnpj       String?  @unique
+  email      String?
+  phone      String?
+  isActive   Boolean  @default(true)
+
+  products   Product[]
+  noteTransits NoteTransit[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+
+  @@map("suppliers")
+}
+
+model CostCenter {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+
+  auditExpenses AuditExpense[]
+  inventoryCosts InventoryCost[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@map("cost_centers")
+}
+
+// ============================================================
+// CORE — SISTEMA DE PARÂMETROS
+// ============================================================
+
+model SystemParameter {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   @db.Text
+  type        String   // string, number, boolean, json
+  module      String?  // null = global
+  label       String
+  description String?
+  isPublic    Boolean  @default(false)
+
+  history     SystemParameterHistory[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  @@map("system_parameters")
+}
+
+model SystemParameterHistory {
+  id          String @id @default(cuid())
+  parameterId String
+  oldValue    String @db.Text
+  newValue    String @db.Text
+  changedBy   String
+  reason      String?
+
+  parameter SystemParameter @relation(fields: [parameterId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("system_parameter_history")
+}
+
+// ============================================================
+// CORE — ANEXOS
+// ============================================================
+
+model Attachment {
+  id              String   @id @default(cuid())
+  originalName    String
+  storedName      String
+  extension       String
+  mimeType        String
+  fileType        String   // image, pdf, xlsx, document, evidence, receipt
+  sizeBytes       Int
+  fileHash        String
+  storageProvider StorageProvider @default(LOCAL)
+  storagePath     String
+  storageUrl      String?
+
+  // Referência polimórfica
+  module          String   // cde, write-off, inventory, pending, etc.
+  recordId        String
+  description     String?
+
+  uploadedById    String
+  uploadedBy      User     @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  createdAt       DateTime @default(now())
+  deletedAt       DateTime?
+
+  @@index([module, recordId])
+  @@index([uploadedById])
+  @@map("attachments")
+}
+
+// ============================================================
+// CORE — COMENTÁRIOS
+// ============================================================
+
+model Comment {
+  id        String   @id @default(cuid())
+  module    String
+  recordId  String
+  content   String   @db.Text
+  isInternal Boolean @default(false)  // visível apenas para auditoria
+
+  authorId  String
+  author    User     @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@index([module, recordId])
+  @@map("comments")
+}
+
+// ============================================================
+// CORE — NOTIFICAÇÕES
+// ============================================================
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  body       String
+  type       String   // info, warning, alert, success
+  module     String?
+  recordId   String?
+  actionUrl  String?
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  sentAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================================
+// CORE — LOGS DE AUDITORIA (TÉCNICO)
+// ============================================================
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  action       String   // LOGIN, LOGOUT, AUTH_FAIL, EXPORT, DELETE, PERMISSION_CHANGE, etc.
+  module       String?
+  recordId     String?
+  description  String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  sessionId    String?
+  severity     String   @default("INFO") // INFO, WARN, ERROR, CRITICAL
+
+  user User? @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([module, recordId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// CORE — HISTÓRICO FUNCIONAL
+// ============================================================
+
+model ActivityHistory {
+  id           String         @id @default(cuid())
+  module       String
+  recordId     String
+  action       ActivityAction
+  description  String
+  fromValue    Json?
+  toValue      Json?
+  metadata     Json?
+
+  actorId      String
+  actor        User   @relation(fields: [actorId], references: [id])
+
+  createdAt    DateTime @default(now())
+
+  @@index([module, recordId])
+  @@index([actorId])
+  @@map("activity_history")
+}
+
+// ============================================================
+// CORE — MOTOR DE PENDÊNCIAS
+// ============================================================
+
+model PendingItem {
+  id              String             @id @default(cuid())
+  module          String             // cde, write-off, inventory, etc.
+  recordId        String?            // ID do registro de origem
+  type            String             // tipo específico por módulo
+  title           String
+  description     String             @db.Text
+  criticality     PendingCriticality @default(MEDIUM)
+  status          PendingStatus      @default(OPEN)
+  origin          PendingOrigin      @default(AUTOMATIC)
+
+  storeId         String?
+  store           Store?   @relation(fields: [storeId], references: [id])
+  regionId        String?
+
+  responsibleId   String?
+  responsible     User?    @relation("PendingResponsible", fields: [responsibleId], references: [id])
+
+  slaConfigId     String?
+  slaConfig       SlaConfig? @relation(fields: [slaConfigId], references: [id])
+
+  openedAt        DateTime @default(now())
+  dueAt           DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  expiresAt       DateTime?
+
+  slaBreached     Boolean  @default(false)
+  slaBreachedAt   DateTime?
+  recurrenceCount Int      @default(0)
+
+  observations    String?  @db.Text
+  resolution      String?  @db.Text
+
+  interactions    PendingInteraction[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+
+  @@index([module, recordId])
+  @@index([storeId, status])
+  @@index([status, dueAt])
+  @@index([responsibleId])
+  @@map("pending_items")
+}
+
+model PendingInteraction {
+  id          String   @id @default(cuid())
+  pendingId   String
+  type        String   // comment, status_change, attachment, validation, rejection
+  content     String   @db.Text
+  fromStatus  PendingStatus?
+  toStatus    PendingStatus?
+  metadata    Json?
+
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id])
+  pending     PendingItem  @relation(fields: [pendingId], references: [id])
+
+  createdAt   DateTime @default(now())
+
+  @@index([pendingId])
+  @@map("pending_interactions")
+}
+
+// ============================================================
+// CORE — MOTOR DE SLA
+// ============================================================
+
+model SlaConfig {
+  id              String   @id @default(cuid())
+  name            String
+  module          String
+  type            String?  // tipo de pendência
+  criticality     PendingCriticality?
+  deadlineHours   Int      // prazo em horas
+  warningHours    Int      // alerta X horas antes do vencimento
+  workingHoursOnly Boolean @default(false)
+  isActive        Boolean  @default(true)
+
+  validFrom       DateTime @default(now())
+  validUntil      DateTime?
+
+  pendingItems    PendingItem[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdBy       String?
+
+  @@unique([module, type, criticality])
+  @@map("sla_configs")
+}
+
+// ============================================================
+// CORE — CENTRAL DE IMPORTAÇÕES
+// ============================================================
+
+model ImportLayout {
+  id           String   @id @default(cuid())
+  name         String
+  module       String
+  description  String?
+  isActive     Boolean  @default(true)
+
+  versions     ImportLayoutVersion[]
+  batches      ImportBatch[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  createdBy    String?
+
+  @@unique([module, name])
+  @@map("import_layouts")
+}
+
+model ImportLayoutVersion {
+  id           String   @id @default(cuid())
+  layoutId     String
+  version      Int
+  config       Json     // colunas, tipos, obrigatoriedade, transformações
+  changelog    String?
+  isActive     Boolean  @default(true)
+
+  layout       ImportLayout @relation(fields: [layoutId], references: [id])
+  batches      ImportBatch[]
+
+  createdAt    DateTime @default(now())
+  createdBy    String?
+
+  @@unique([layoutId, version])
+  @@map("import_layout_versions")
+}
+
+model ImportBatch {
+  id              String       @id @default(cuid())
+  module          String
+  fileType        String       // xlsx, csv
+  originalName    String
+  storedPath      String
+  fileHash        String
+  fileSize        Int
+  status          ImportStatus @default(UPLOADING)
+
+  layoutId        String?
+  layout          ImportLayout? @relation(fields: [layoutId], references: [id])
+  layoutVersionId String?
+  layoutVersion   ImportLayoutVersion? @relation(fields: [layoutVersionId], references: [id])
+
+  totalRows       Int          @default(0)
+  validRows       Int          @default(0)
+  invalidRows     Int          @default(0)
+  publishedRows   Int          @default(0)
+
+  uploadedById    String
+  uploadedBy      User         @relation(fields: [uploadedById], references: [id])
+
+  errorSummary    String?
+  publishedAt     DateTime?
+  rolledBackAt    DateTime?
+
+  items           ImportBatchItem[]
+  errors          ImportError[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([module, status])
+  @@index([fileHash])
+  @@map("import_batches")
+}
+
+model ImportBatchItem {
+  id           String  @id @default(cuid())
+  batchId      String
+  rowNumber    Int
+  rawData      Json
+  parsedData   Json?
+  isValid      Boolean @default(false)
+  isPublished  Boolean @default(false)
+  publishedAt  DateTime?
+  recordId     String?  // ID do registro criado/atualizado após publicação
+  businessKey  String?  // chave de negócio para evitar duplicidade
+  errors       String?  @db.Text
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, isValid])
+  @@index([batchId, businessKey])
+  @@map("import_batch_items")
+}
+
+model ImportError {
+  id        String @id @default(cuid())
+  batchId   String
+  rowNumber Int?
+  field     String?
+  errorCode String
+  message   String @db.Text
+  rawValue  String?
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@map("import_errors")
+}
+
+// ============================================================
+// MÓDULO 1 — CDE (CONTROLE DIÁRIO DE ESTOQUE)
+// ============================================================
+
+model CdeDailyRecord {
+  id              String   @id @default(cuid())
+  storeId         String
+  date            DateTime @db.Date
+  importBatchId   String?
+
+  initialStock    Decimal  @db.Decimal(15, 4)
+  entries         Decimal  @db.Decimal(15, 4) @default(0)
+  exits           Decimal  @db.Decimal(15, 4) @default(0)
+  sales           Decimal  @db.Decimal(15, 4) @default(0)
+  exchanges       Decimal  @db.Decimal(15, 4) @default(0)
+  returns         Decimal  @db.Decimal(15, 4) @default(0)
+  finalStock      Decimal  @db.Decimal(15, 4)
+  theoreticalFinalStock Decimal @db.Decimal(15, 4)  // calculado
+
+  // Validação da loja
+  status          String   @default("PENDING")  // PENDING, VIEWED, ACCEPTED, CONTESTED, NO_RESPONSE
+  viewedAt        DateTime?
+  viewedById      String?
+  acceptedAt      DateTime?
+  acceptedById    String?
+  contestedAt     DateTime?
+  contestedById   String?
+  contestReason   String?  @db.Text
+
+  store           Store    @relation(fields: [storeId], references: [id])
+  movements       CdeMovement[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+
+  @@unique([storeId, date])
+  @@index([storeId, date])
+  @@index([status])
+  @@map("cde_daily_records")
+}
+
+model CdeMovement {
+  id            String   @id @default(cuid())
+  recordId      String
+  noteNumber    String?
+  type          String   // entrada, saída, venda, troca, devolução, etc.
+  origin        String?
+  destination   String?
+  quantity      Decimal  @db.Decimal(15, 4)
+  value         Decimal? @db.Decimal(15, 4)
+  productId     String?
+  sku           String?
+  description   String?
+  responsibleId String?
+  occurredAt    DateTime
+  metadata      Json?
+
+  record CdeDailyRecord @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId])
+  @@index([noteNumber])
+  @@map("cde_movements")
+}
+
+// ============================================================
+// MÓDULO 2 — TRÂNSITO DE NOTAS
+// ============================================================
+
+model NoteTransit {
+  id              String            @id @default(cuid())
+  noteNumber      String
+  noteType        String            // NF-e, NF-s, transferência, etc.
+  supplierId      String?
+  originStoreId   String?
+  destinationStoreId String
+  issuedAt        DateTime
+  expectedAt      DateTime?
+  receivedAt      DateTime?
+  status          NoteTransitStatus @default(PENDING)
+  totalValue      Decimal?          @db.Decimal(15, 4)
+  totalItems      Int               @default(0)
+  slaConfigId     String?
+  slaBreached     Boolean           @default(false)
+  leadTimeHours   Int?
+  justification   String?           @db.Text
+  importBatchId   String?
+
+  destinationStore Store    @relation(fields: [destinationStoreId], references: [id])
+  supplier         Supplier? @relation(fields: [supplierId], references: [id])
+  events           NoteTransitEvent[]
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+  createdBy        String?
+
+  @@unique([noteNumber, destinationStoreId])
+  @@index([status])
+  @@index([destinationStoreId])
+  @@index([expectedAt])
+  @@map("note_transits")
+}
+
+model NoteTransitEvent {
+  id          String   @id @default(cuid())
+  transitId   String
+  type        String   // STATUS_CHANGE, OBSERVATION, IMPORT
+  description String
+  metadata    Json?
+  actorId     String?
+
+  transit     NoteTransit @relation(fields: [transitId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@index([transitId])
+  @@map("note_transit_events")
+}
+
+// ============================================================
+// MÓDULO 3 — CONTROLE DE BAIXAS E PERDAS
+// ============================================================
+
+model WriteOff {
+  id              String   @id @default(cuid())
+  storeId         String
+  importBatchId   String?
+  date            DateTime @db.Date
+  totalQuantity   Decimal  @db.Decimal(15, 4) @default(0)
+  totalValue      Decimal  @db.Decimal(15, 4) @default(0)
+  totalCost       Decimal  @db.Decimal(15, 4) @default(0)
+  status          String   @default("IMPORTED") // IMPORTED, REVIEWED, VALIDATED, CONTESTED
+  validatedById   String?
+  validatedAt     DateTime?
+  observations    String?  @db.Text
+
+  store    Store          @relation(fields: [storeId], references: [id])
+  items    WriteOffItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+
+  @@index([storeId, date])
+  @@map("write_offs")
+}
+
+model WriteOffItem {
+  id            String   @id @default(cuid())
+  writeOffId    String
+  sku           String
+  productId     String?
+  description   String
+  categoryId    String?
+  type          String   // AVARIA, VENCIDO, PROV, BRINDE, PERDA, OUTRO
+  quantity      Decimal  @db.Decimal(15, 4)
+  unitValue     Decimal? @db.Decimal(15, 4)
+  totalValue    Decimal? @db.Decimal(15, 4)
+  unitCost      Decimal? @db.Decimal(15, 4)
+  totalCost     Decimal? @db.Decimal(15, 4)
+  reason        String?
+  responsibleId String?
+  pdv           String?
+  metadata      Json?
+
+  writeOff WriteOff @relation(fields: [writeOffId], references: [id], onDelete: Cascade)
+
+  @@index([writeOffId])
+  @@index([sku])
+  @@index([type])
+  @@map("write_off_items")
+}
+
+// ============================================================
+// MÓDULO 4 — CONFERÊNCIA DE MERCADORIA
+// ============================================================
+
+model MerchandiseConference {
+  id                  String   @id @default(cuid())
+  storeId             String
+  noteNumber          String
+  supplierId          String?
+  operationType       String   // recebimento, conferência, devolução
+  status              String   @default("PENDING")
+
+  expectedQty         Decimal? @db.Decimal(15, 4)
+  receivedQty         Decimal? @db.Decimal(15, 4)
+  conferencedQty      Decimal? @db.Decimal(15, 4)
+  shortageQty         Decimal? @db.Decimal(15, 4)
+  surplusQty          Decimal? @db.Decimal(15, 4)
+  divergenceQty       Decimal? @db.Decimal(15, 4)
+  divergenceValue     Decimal? @db.Decimal(15, 4)
+
+  // Tempos obrigatórios
+  receivedAt          DateTime?
+  conferenceStartedAt DateTime?
+  conferenceEndedAt   DateTime?
+  systemEntryAt       DateTime?
+
+  receivingTimeMinutes   Int?
+  conferenceTimeMinutes  Int?
+  totalProcessTimeMinutes Int?
+  accuracy               Decimal? @db.Decimal(5, 2)
+
+  responsibleId       String?
+  importBatchId       String?
+  observations        String?
+
+  store   Store  @relation(fields: [storeId], references: [id])
+  items   MerchandiseConferenceItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+
+  @@index([storeId, status])
+  @@index([noteNumber])
+  @@map("merchandise_conferences")
+}
+
+model MerchandiseConferenceItem {
+  id             String   @id @default(cuid())
+  conferenceId   String
+  sku            String
+  productId      String?
+  description    String
+  expectedQty    Decimal  @db.Decimal(15, 4)
+  receivedQty    Decimal  @db.Decimal(15, 4) @default(0)
+  conferencedQty Decimal  @db.Decimal(15, 4) @default(0)
+  divergenceQty  Decimal  @db.Decimal(15, 4) @default(0)
+  unitCost       Decimal? @db.Decimal(15, 4)
+  divergenceValue Decimal? @db.Decimal(15, 4)
+  source         String?  // sistema, bipagem, extranet
+  status         String   @default("OK") // OK, SHORTAGE, SURPLUS, DIVERGENT
+
+  conference MerchandiseConference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+
+  @@index([conferenceId])
+  @@map("merchandise_conference_items")
+}
+
+// ============================================================
+// MÓDULO 5 — RONDA DE AUDITORIA
+// ============================================================
+
+model ChecklistTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  module      String   @default("audit-round")
+  isActive    Boolean  @default(true)
+
+  versions    ChecklistVersion[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  createdBy   String?
+
+  @@map("checklist_templates")
+}
+
+model ChecklistVersion {
+  id           String   @id @default(cuid())
+  templateId   String
+  version      Int
+  label        String?
+  isActive     Boolean  @default(true)
+  publishedAt  DateTime?
+  publishedBy  String?
+
+  template  ChecklistTemplate  @relation(fields: [templateId], references: [id])
+  items     ChecklistItem[]
+  rounds    AuditRound[]
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@unique([templateId, version])
+  @@map("checklist_versions")
+}
+
+model ChecklistItem {
+  id                  String            @id @default(cuid())
+  versionId           String
+  order               Int
+  category            String?
+  question            String
+  type                ChecklistItemType @default(YES_NO)
+  options             Json?             // para MULTIPLE_CHOICE
+  weight              Decimal           @db.Decimal(5, 2) @default(1)
+  maxScore            Decimal           @db.Decimal(5, 2) @default(1)
+  isRequired          Boolean           @default(true)
+  requiresEvidence    Boolean           @default(false)
+  criticality         PendingCriticality?
+  generatePending     Boolean           @default(false)  // se resposta crítica, gera pendência
+  pendingTriggerValue String?           // valor que aciona a pendência
+
+  version  ChecklistVersion      @relation(fields: [versionId], references: [id])
+  answers  AuditRoundAnswer[]
+
+  @@index([versionId])
+  @@map("checklist_items")
+}
+
+model AuditRound {
+  id               String           @id @default(cuid())
+  storeId          String
+  checklistVersionId String
+  auditorId        String
+  status           AuditRoundStatus @default(DRAFT)
+
+  scheduledAt      DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  totalScore       Decimal?  @db.Decimal(8, 2)
+  maxScore         Decimal?  @db.Decimal(8, 2)
+  scorePercent     Decimal?  @db.Decimal(5, 2)
+  observations     String?   @db.Text
+
+  // Assinatura digital (futura)
+  signatureData    String?
+  signedAt         DateTime?
+  signedById       String?
+
+  store           Store            @relation(fields: [storeId], references: [id])
+  checklistVersion ChecklistVersion @relation(fields: [checklistVersionId], references: [id])
+  answers         AuditRoundAnswer[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+
+  @@index([storeId, status])
+  @@index([auditorId])
+  @@map("audit_rounds")
+}
+
+model AuditRoundAnswer {
+  id            String   @id @default(cuid())
+  roundId       String
+  itemId        String
+  value         String?  // resposta em texto/json
+  score         Decimal? @db.Decimal(5, 2)
+  observations  String?  @db.Text
+  isCompliant   Boolean?
+
+  round   AuditRound    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  item    ChecklistItem @relation(fields: [itemId], references: [id])
+  evidences AuditRoundEvidence[]
+
+  @@unique([roundId, itemId])
+  @@map("audit_round_answers")
+}
+
+model AuditRoundEvidence {
+  id           String @id @default(cuid())
+  answerId     String
+  attachmentId String
+  description  String?
+
+  answer AuditRoundAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("audit_round_evidences")
+}
+
+// ============================================================
+// MÓDULO 6 — CUSTO DE AUDITORIA
+// ============================================================
+
+model AuditorBaseCost {
+  id         String   @id @default(cuid())
+  auditorId  String
+  monthlyCost Decimal @db.Decimal(15, 4)
+  validFrom  DateTime
+  validUntil DateTime?
+  notes      String?
+  createdBy  String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([auditorId, validFrom])
+  @@map("auditor_base_costs")
+}
+
+model AuditTrip {
+  id          String   @id @default(cuid())
+  auditorId   String
+  regionId    String?
+  description String?
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+  storesCount Int      @default(0)
+  totalValue  Decimal  @db.Decimal(15, 4) @default(0)
+  status      String   @default("OPEN")  // OPEN, CLOSED
+  observations String? @db.Text
+
+  expenses AuditExpense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+
+  @@index([auditorId])
+  @@map("audit_trips")
+}
+
+model AuditExpense {
+  id           String   @id @default(cuid())
+  tripId       String?
+  auditorId    String
+  storeId      String?
+  costCenterId String?
+  type         String   // HOSPEDAGEM, ALIMENTACAO, COMBUSTIVEL, PEDAGIO, ESTACIONAMENTO, PASSAGEM, LOCACAO, OUTRO
+  subtype      String?
+  date         DateTime @db.Date
+  value        Decimal  @db.Decimal(15, 4)
+  description  String?
+  attachmentId String?
+  observations String?
+
+  trip       AuditTrip?  @relation(fields: [tripId], references: [id])
+  costCenter CostCenter? @relation(fields: [costCenterId], references: [id])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+  createdBy  String?
+
+  @@index([auditorId])
+  @@index([date])
+  @@index([type])
+  @@map("audit_expenses")
+}
+
+// ============================================================
+// MÓDULO 7 — CONTROLE DE PATRIMÔNIO
+// ============================================================
+
+model Asset {
+  id               String      @id @default(cuid())
+  assetCode        String      @unique
+  description      String
+  category         String
+  subcategory      String?
+  serialNumber     String?
+  brand            String?
+  model            String?
+  storeId          String
+  originStoreId    String?
+  regionId         String?
+  costCenterId     String?
+  acquisitionDate  DateTime?   @db.Date
+  acquisitionValue Decimal?    @db.Decimal(15, 4)
+  usefulLifeYears  Int?
+  responsibleId    String?
+  status           AssetStatus @default(ACTIVE)
+  location         String?
+  noteNumber       String?
+  supplierId       String?
+  metadata         Json?
+
+  lastAuditDate    DateTime?
+  lastAuditStatus  String?
+
+  store    Store   @relation(fields: [storeId], references: [id])
+  movements AssetMovement[]
+  audits    AssetAudit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+
+  @@index([storeId, status])
+  @@index([assetCode])
+  @@map("assets")
+}
+
+model AssetMovement {
+  id               String   @id @default(cuid())
+  assetId          String
+  type             String   // TRANSFER, WRITE_OFF, MAINTENANCE, RETURN, LOSS
+  fromStoreId      String?
+  toStoreId        String?
+  responsibleId    String?
+  justification    String?  @db.Text
+  occurredAt       DateTime @default(now())
+  approvedById     String?
+  approvedAt       DateTime?
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([assetId])
+  @@map("asset_movements")
+}
+
+model AssetAudit {
+  id           String   @id @default(cuid())
+  assetId      String
+  auditorId    String
+  storeId      String
+  auditDate    DateTime @db.Date
+  found        Boolean
+  condition    String?  // GOOD, DAMAGED, NEEDS_REPAIR, MISSING
+  location     String?
+  observations String?  @db.Text
+  attachmentId String?
+
+  asset Asset @relation(fields: [assetId], references: [id])
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([assetId])
+  @@map("asset_audits")
+}
+
+// ============================================================
+// MÓDULO 8 — INVENTÁRIO
+// ============================================================
+
+model InventoryCycle {
+  id              String          @id @default(cuid())
+  storeId         String
+  cycleNumber     Int
+  inventoryType   String          // FULL, PARTIAL, CATEGORY
+  date            DateTime        @db.Date
+  period          String?         // Ex: "2024-01"
+  status          InventoryStatus @default(AWAITING_IMPORT)
+
+  // Resultado Quantitativo
+  expectedQty     Decimal?        @db.Decimal(15, 4)
+  countedQty      Decimal?        @db.Decimal(15, 4)
+  divergenceQty   Decimal?        @db.Decimal(15, 4)
+  skuCount        Int             @default(0)
+  skuDivergence   Int             @default(0)
+
+  // Resultado Financeiro
+  lossValue       Decimal?        @db.Decimal(15, 4)
+  gainValue       Decimal?        @db.Decimal(15, 4)
+  netBalance      Decimal?        @db.Decimal(15, 4)
+  lossPercent     Decimal?        @db.Decimal(8, 4)
+  accuracy        Decimal?        @db.Decimal(8, 4)
+
+  responsibleId   String?
+  closedById      String?
+  closedAt        DateTime?
+  observations    String?         @db.Text
+
+  store           Store            @relation(fields: [storeId], references: [id])
+  imports         InventoryImport[]
+  items           InventoryItem[]
+  closings        InventoryClosing[]
+  teamKpis        InventoryTeamKpi[]
+  costs           InventoryCost[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+
+  @@unique([storeId, cycleNumber])
+  @@index([storeId, status])
+  @@index([date])
+  @@map("inventory_cycles")
+}
+
+model InventoryImport {
+  id          String   @id @default(cuid())
+  cycleId     String
+  batchId     String
+  importedAt  DateTime @default(now())
+  importedBy  String
+  rowCount    Int
+  version     Int      @default(1)
+
+  cycle InventoryCycle @relation(fields: [cycleId], references: [id])
+
+  @@map("inventory_imports")
+}
+
+model InventoryItem {
+  id              String   @id @default(cuid())
+  cycleId         String
+  sku             String
+  productId       String?
+  description     String
+  categoryId      String?
+  expectedQty     Decimal  @db.Decimal(15, 4)
+  countedQty      Decimal  @db.Decimal(15, 4)
+  divergenceQty   Decimal  @db.Decimal(15, 4)
+  unitCost        Decimal? @db.Decimal(15, 4)
+  lossValue       Decimal? @db.Decimal(15, 4)
+  gainValue       Decimal? @db.Decimal(15, 4)
+  status          String   @default("OK")  // OK, LOSS, GAIN, ERROR_CTG, RECOUNT
+  hasError        Boolean  @default(false)
+  errorType       String?  // ERROR_CTG, etc.
+
+  cycle InventoryCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId])
+  @@index([sku])
+  @@index([status])
+  @@map("inventory_items")
+}
+
+model InventoryClosing {
+  id              String   @id @default(cuid())
+  cycleId         String
+  version         Int      @default(1)
+  isOfficial      Boolean  @default(false)
+
+  // Dados operacionais do fechamento
+  collaboratorsCount Int   @default(0)
+  collaboratorNames  String?  @db.Text  // JSON array de nomes
+  startTime         DateTime?
+  endTime           DateTime?
+  totalDurationMin  Int?
+  recountCount      Int      @default(0)
+  recountReason     String?
+  hadExternalSupport Boolean @default(false)
+  hadSalesSupport    Boolean @default(false)
+  incidents         String?  @db.Text
+  observations      String?  @db.Text
+
+  // Resultado consolidado (copia do cycle no momento do fechamento)
+  expectedQty       Decimal? @db.Decimal(15, 4)
+  countedQty        Decimal? @db.Decimal(15, 4)
+  divergenceQty     Decimal? @db.Decimal(15, 4)
+  lossValue         Decimal? @db.Decimal(15, 4)
+  gainValue         Decimal? @db.Decimal(15, 4)
+  netBalance        Decimal? @db.Decimal(15, 4)
+  lossPercent       Decimal? @db.Decimal(8, 4)
+  accuracy          Decimal? @db.Decimal(8, 4)
+
+  closedById        String?
+  closedAt          DateTime?
+  reopenedById      String?
+  reopenedAt        DateTime?
+  reopenReason      String?
+
+  cycle InventoryCycle @relation(fields: [cycleId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@unique([cycleId, version])
+  @@map("inventory_closings")
+}
+
+// ============================================================
+// MÓDULO 9 — KPI INTERNO DO TIME DE INVENTÁRIO
+// ============================================================
+
+model InventoryTeamKpi {
+  id                  String   @id @default(cuid())
+  cycleId             String
+  closingVersion      Int
+  version             Int      @default(1)
+  isOfficial          Boolean  @default(false)
+
+  // Indicadores calculados
+  totalPiecesCounted  Decimal  @db.Decimal(15, 4) @default(0)
+  totalSkuCounted     Int      @default(0)
+  piecesPerCollaborator Decimal @db.Decimal(15, 4) @default(0)
+  skuPerCollaborator  Decimal  @db.Decimal(15, 4) @default(0)
+  productivityPerHour Decimal  @db.Decimal(15, 4) @default(0)
+  totalDurationMin    Int      @default(0)
+
+  // Erros
+  piecesByCountError  Decimal  @db.Decimal(15, 4) @default(0)
+  skuByCountError     Int      @default(0)
+  errorRate           Decimal  @db.Decimal(8, 4) @default(0)
+  recountRate         Decimal  @db.Decimal(8, 4) @default(0)
+
+  collaboratorsCount  Int      @default(0)
+
+  cycle InventoryCycle @relation(fields: [cycleId], references: [id])
+  members InventoryTeamMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@unique([cycleId, version])
+  @@map("inventory_team_kpis")
+}
+
+model InventoryTeamMember {
+  id            String @id @default(cuid())
+  kpiId         String
+  name          String
+  role          String?
+  piecesCount   Decimal @db.Decimal(15, 4) @default(0)
+  skuCount      Int     @default(0)
+  isResponsible Boolean @default(false)
+
+  kpi InventoryTeamKpi @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+
+  @@map("inventory_team_members")
+}
+
+// ============================================================
+// MÓDULO 10 — CUSTO DE INVENTÁRIO
+// ============================================================
+
+model InventoryCost {
+  id                  String   @id @default(cuid())
+  cycleId             String
+  costCenterId        String?
+  collaboratorsCount  Int      @default(0)
+  totalHours          Decimal  @db.Decimal(8, 2) @default(0)
+  teamCost            Decimal  @db.Decimal(15, 4) @default(0)
+  externalSupportCost Decimal  @db.Decimal(15, 4) @default(0)
+  otherCosts          Decimal  @db.Decimal(15, 4) @default(0)
+  totalCost           Decimal  @db.Decimal(15, 4) @default(0)
+
+  // Calculados
+  costPerPiece        Decimal? @db.Decimal(15, 6)
+  costPerSku          Decimal? @db.Decimal(15, 6)
+  costPerRecount      Decimal? @db.Decimal(15, 6)
+
+  observations        String?
+
+  cycle      InventoryCycle @relation(fields: [cycleId], references: [id])
+  costCenter CostCenter?    @relation(fields: [costCenterId], references: [id])
+  items      InventoryCostItem[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String?
+
+  @@map("inventory_costs")
+}
+
+model InventoryCostItem {
+  id          String  @id @default(cuid())
+  costId      String
+  description String
+  type        String  // FIXED, VARIABLE
+  value       Decimal @db.Decimal(15, 4)
+
+  cost InventoryCost @relation(fields: [costId], references: [id], onDelete: Cascade)
+
+  @@map("inventory_cost_items")
+}

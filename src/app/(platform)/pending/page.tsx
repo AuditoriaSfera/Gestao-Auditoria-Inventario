@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
+import { Suspense } from 'react'
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -41,7 +42,7 @@ const criticalityColors: Record<string, string> = {
   CRITICAL: 'bg-red-100 text-red-800',
 }
 
-export default function PendingPage() {
+function PendingPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [search, setSearch] = useState('')
@@ -244,5 +245,13 @@ export default function PendingPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function PendingPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}>
+      <PendingPageContent />
+    </Suspense>
   )
 }

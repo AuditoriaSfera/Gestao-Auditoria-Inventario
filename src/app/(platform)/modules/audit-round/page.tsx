@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, StatusBadge, EmptyState, LoadingState, Btn } from '@/components/shared/module-page'
@@ -36,7 +36,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export default function AuditRoundPage() {
+function AuditRoundPageContent() {
   const [page, setPage] = useState(1)
   const [status, setStatus] = useState('')
   const searchParams = useSearchParams()
@@ -169,5 +169,13 @@ export default function AuditRoundPage() {
         </DataCard>
       </div>
     </ModulePage>
+  )
+}
+
+export default function AuditRoundPage() {
+  return (
+    <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}><div style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid #6366f1', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /></div>}>
+      <AuditRoundPageContent />
+    </Suspense>
   )
 }

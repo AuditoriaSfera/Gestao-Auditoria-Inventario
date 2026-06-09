@@ -359,8 +359,8 @@ model StoreGroupMember {
   groupId String
   storeId String
 
-  group Store      @relation("StoreGroupMemberGroup", fields: [groupId], references: [id])
-  store Store      @relation("StoreGroupMemberStore", fields: [storeId], references: [id])
+  group StoreGroup @relation(fields: [groupId], references: [id])
+  store Store      @relation(fields: [storeId], references: [id])
 
   @@unique([groupId, storeId])
   @@map("store_group_members")
@@ -386,8 +386,7 @@ model Store {
   metadata     Json?       // campos extras por loja
 
   region      Region?            @relation(fields: [regionId], references: [id])
-  groups      StoreGroupMember[] @relation("StoreGroupMemberStore")
-  groupsOwned StoreGroupMember[] @relation("StoreGroupMemberGroup")
+  groups      StoreGroupMember[]
   userScopes  UserStoreScope[]
 
   // Módulos

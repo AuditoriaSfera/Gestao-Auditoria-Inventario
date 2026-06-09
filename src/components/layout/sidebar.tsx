@@ -61,6 +61,10 @@ const navItems: NavItem[] = [
     href: '/modules/note-transit',
     label: MODULE_LABELS['note-transit']!,
     icon: Truck,
+    children: [
+      { href: '/modules/note-transit', label: 'Visão Geral' },
+      { href: '/modules/note-transit/importacao', label: 'Importação de Dados' },
+    ],
   },
   {
     href: '/modules/write-offs',

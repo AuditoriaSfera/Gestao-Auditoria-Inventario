@@ -380,7 +380,9 @@ function NovaTripModal({ onClose, collabsList, storesList, costTypes }: {
                     style={{ ...inp, fontSize: '14px', padding: '8px 12px' }}
                   >
                     <option value="">Selecione o colaborador...</option>
-                    {collabsList.map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
+                    {collabsList
+                      .filter((c: any) => c.id === entry.collaboratorId || !collabEntries.some(e => e.id !== entry.id && e.collaboratorId === c.id))
+                      .map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
                   </select>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

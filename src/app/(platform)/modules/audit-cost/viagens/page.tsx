@@ -114,8 +114,48 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
   )
 }
 
+// ─── Multi-select inline para Loja do dia ────────────────────────────────────
+function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  function toggle(s: string) { onChange(selected.includes(s) ? selected.filter(x => x !== s) : [...selected, s]) }
+  const allSelected = options.length > 0 && selected.length === options.length
+  const label = selected.length === 0 ? null : allSelected ? `Todas (${options.length})` : selected.length > 1 ? `${selected.length} lojas` : selected[0]
+  return (
+    <div style={{ position: 'relative' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '30px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', minWidth: '140px', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '12px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? '—'}</span>
+        <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '4px' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: '200px', marginTop: '2px' }}>
+          <div style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button onClick={() => onChange([...options])} style={{ fontSize: '11px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
+            <button onClick={() => onChange([])} style={{ fontSize: '11px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+          </div>
+          {options.map(s => {
+            const isSel = selected.includes(s)
+            return (
+              <div key={s} onClick={() => toggle(s)} style={{ padding: '7px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: isSel ? '#eff6ff' : 'transparent' }}
+                onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
+                onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+                <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {isSel && <span style={{ color: 'white', fontSize: '9px', lineHeight: 1 }}>✓</span>}
+                </div>
+                <span style={{ fontSize: '12px', color: '#0f172a' }}>{s}</span>
+              </div>
+            )
+          })}
+          <div style={{ padding: '6px 10px', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: '11px', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer' }}>Fechar ✕</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Tabela Diária de Colaborador ─────────────────────────────────────────────
-type DayRow = { storeName: string; values: Record<string, string> }
+type DayRow = { storeNames: string[]; values: Record<string, string> }
 
 function TabelaDiaria({
   dates, storeOptions, tipos, rows, onChange
@@ -126,8 +166,8 @@ function TabelaDiaria({
   rows: Record<string, DayRow>
   onChange: (rows: Record<string, DayRow>) => void
 }) {
-  function setStore(d: string, v: string) {
-    onChange({ ...rows, [d]: { ...rows[d], storeName: v } })
+  function setStores(d: string, v: string[]) {
+    onChange({ ...rows, [d]: { ...rows[d], storeNames: v } })
   }
   function setValue(d: string, tipo: string, v: string) {
     onChange({ ...rows, [d]: { ...rows[d], values: { ...rows[d]?.values, [tipo]: v } } })
@@ -155,17 +195,14 @@ function TabelaDiaria({
         </thead>
         <tbody>
           {dates.map(d => {
-            const row = rows[d] ?? { storeName: '', values: {} }
+            const row = rows[d] ?? { storeNames: [], values: {} }
             const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
             return (
               <tr key={d}>
                 <td style={{ ...tdSt, fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>{fmtDate(d)}</td>
                 <td style={{ ...tdSt, color: '#64748b', whiteSpace: 'nowrap', fontSize: '12px' }}>{diaSemana(d)}</td>
                 <td style={tdSt}>
-                  <select value={row.storeName} onChange={e => setStore(d, e.target.value)} style={{ ...inpSm, fontSize: '12px' }}>
-                    <option value="">—</option>
-                    {storeOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
                 </td>
                 {tipos.map(t => (
                   <td key={t} style={{ ...tdSt, textAlign: 'right' }}>
@@ -208,12 +245,12 @@ type CollabEntry = { id: string; collaboratorId: string; advancedAmount: string;
 
 function buildEmptyRows(dates: string[]): Record<string, DayRow> {
   const rows: Record<string, DayRow> = {}
-  for (const d of dates) rows[d] = { storeName: '', values: {} }
+  for (const d of dates) rows[d] = { storeNames: [], values: {} }
   return rows
 }
 function syncRows(prev: Record<string, DayRow>, newDates: string[]): Record<string, DayRow> {
   const result: Record<string, DayRow> = {}
-  for (const d of newDates) result[d] = prev[d] ?? { storeName: '', values: {} }
+  for (const d of newDates) result[d] = prev[d] ?? { storeNames: [], values: {} }
   return result
 }
 
@@ -306,8 +343,8 @@ function NovaTripModal({ onClose, collabsList, storesList, costTypes }: {
                 type: tipo,
                 date: new Date(d + 'T12:00:00'),
                 value: val,
-                storeName: row.storeName || undefined,
-                cityUf: row.storeName ? cidadesInfo || undefined : undefined,
+                storeName: row.storeNames?.length ? row.storeNames.join(', ') : undefined,
+                cityUf: row.storeNames?.length ? cidadesInfo || undefined : undefined,
                 paymentMethod: 'Adiantamento',
               })
             }

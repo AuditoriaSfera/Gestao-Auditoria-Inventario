@@ -125,4 +125,13 @@ export const storesRouter = createTRPCRouter({
         data,
       })
     }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.db.store.update({
+        where: { id: input.id },
+        data: { deletedAt: new Date() },
+      })
+    }),
 })

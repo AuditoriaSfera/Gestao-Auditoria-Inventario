@@ -86,7 +86,6 @@ const navItems: NavItem[] = [
     label: 'Custo Auditoria',
     icon: DollarSign,
     children: [
-      { href: '/modules/audit-cost/formulario', label: 'Formulário' },
       { href: '/modules/audit-cost/viagens', label: 'Cadastro de Viagens' },
       { href: '/modules/audit-cost/dashboard', label: 'Dashboard' },
     ],

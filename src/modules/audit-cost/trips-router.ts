@@ -61,6 +61,7 @@ export const auditTripsRouter = createTRPCRouter({
       startDate: z.date(),
       endDate: z.date(),
       releasedAmount: z.number().min(0).default(0),
+      advancedAmount: z.number().min(0).default(0),
       observations: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -80,6 +81,7 @@ export const auditTripsRouter = createTRPCRouter({
       startDate: z.date().optional(),
       endDate: z.date().optional(),
       releasedAmount: z.number().min(0).optional(),
+      advancedAmount: z.number().min(0).optional(),
       status: z.string().optional(),
       observations: z.string().optional(),
     }))
@@ -92,6 +94,20 @@ export const auditTripsRouter = createTRPCRouter({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.db.auditTrip.update({ where: { id: input.id }, data: { deletedAt: new Date() } })
+    }),
+
+  updateSettlement: protectedProcedure
+    .input(z.object({
+      id: z.string(),
+      advancedAmount: z.number().min(0).optional(),
+      returnedAmount: z.number().min(0).optional(),
+      returnProofUrl: z.string().optional(),
+      returnProofNote: z.string().optional(),
+      returnedAt: z.date().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...data } = input
+      return ctx.db.auditTrip.update({ where: { id }, data })
     }),
 
   exportCsv: protectedProcedure

@@ -8,8 +8,8 @@ import { ModulePage, DataCard, StatusBadge, EmptyState, LoadingState, Btn } from
 
 const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Ativa', INACTIVE: 'Inativa', CLOSED: 'Fechada' }
 
-type StoreForm = { code: string; name: string; tradeName: string; cnpj: string; regionId: string; address: string; city: string; state: string; phone: string; email: string }
-const emptyForm = (): StoreForm => ({ code: '', name: '', tradeName: '', cnpj: '', regionId: '', address: '', city: '', state: '', phone: '', email: '' })
+type StoreForm = { code: string; name: string; tradeName: string; city: string; state: string }
+const emptyForm = (): StoreForm => ({ code: '', name: '', tradeName: '', city: '', state: '' })
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -40,6 +40,7 @@ export default function StoresPage() {
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [editStore, setEditStore] = useState<any | null>(null)
+  const [deleteStoreId, setDeleteStoreId] = useState<string | null>(null)
   const [form, setForm] = useState<StoreForm>(emptyForm())
   const [error, setError] = useState('')
 
@@ -55,9 +56,12 @@ export default function StoresPage() {
     onSuccess: () => { utils.stores.list.invalidate(); setEditStore(null); setError('') },
     onError: e => setError(e.message),
   })
+  const deleteMut = trpc.stores.delete.useMutation({
+    onSuccess: () => { utils.stores.list.invalidate(); setDeleteStoreId(null) },
+  })
 
   function openEdit(s: any) {
-    setForm({ code: s.code, name: s.name, tradeName: s.tradeName ?? '', cnpj: s.cnpj ?? '', regionId: s.regionId ?? '', address: s.address ?? '', city: s.city ?? '', state: s.state ?? '', phone: s.phone ?? '', email: s.email ?? '' })
+    setForm({ code: s.code, name: s.name, tradeName: s.tradeName ?? '', city: s.city ?? '', state: s.state ?? '' })
     setEditStore(s)
     setError('')
   }
@@ -68,30 +72,20 @@ export default function StoresPage() {
     <>
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-        <Field label="Código *" half><input style={inputStyle} value={form.code} onChange={e => set('code', e.target.value)} placeholder="Ex: SP001" disabled={isEdit} /></Field>
-        <Field label="Razão social *" half><input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="Nome legal da loja" /></Field>
-        <Field label="Nome fantasia" half><input style={inputStyle} value={form.tradeName} onChange={e => set('tradeName', e.target.value)} /></Field>
-        <Field label="CNPJ" half><input style={inputStyle} value={form.cnpj} onChange={e => set('cnpj', e.target.value)} placeholder="00.000.000/0001-00" /></Field>
-        <Field label="Regional">
-          <select style={{ ...inputStyle }} value={form.regionId} onChange={e => set('regionId', e.target.value)}>
-            <option value="">Sem regional</option>
-            {(regions ?? []).map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Endereço"><input style={inputStyle} value={form.address} onChange={e => set('address', e.target.value)} /></Field>
-        <Field label="Cidade" half><input style={inputStyle} value={form.city} onChange={e => set('city', e.target.value)} /></Field>
-        <Field label="Estado" half><input style={inputStyle} value={form.state} onChange={e => set('state', e.target.value)} maxLength={2} placeholder="SP" /></Field>
-        <Field label="Telefone" half><input style={inputStyle} value={form.phone} onChange={e => set('phone', e.target.value)} /></Field>
-        <Field label="E-mail" half><input style={inputStyle} type="email" value={form.email} onChange={e => set('email', e.target.value)} /></Field>
+        <Field label="Código *" half><input style={inputStyle} value={form.code} onChange={e => set('code', e.target.value)} placeholder="Ex: 001" disabled={isEdit} /></Field>
+        <Field label="Razão Social *" half><input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="Nome legal da loja" /></Field>
+        <Field label="Nome Fantasia" half><input style={inputStyle} value={form.tradeName} onChange={e => set('tradeName', e.target.value)} placeholder="Nome comercial" /></Field>
+        <Field label="Cidade" half><input style={inputStyle} value={form.city} onChange={e => set('city', e.target.value)} placeholder="Ex: São Paulo" /></Field>
+        <Field label="Estado" half><input style={inputStyle} value={form.state} onChange={e => set('state', e.target.value.toUpperCase())} maxLength={2} placeholder="SP" /></Field>
       </div>
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
         <Btn variant="outline" onClick={() => { isEdit ? setEditStore(null) : setShowCreate(false); setError('') }}>Cancelar</Btn>
         <Btn onClick={() => {
-          if (!form.code || !form.name) { setError('Código e nome são obrigatórios.'); return }
-          if (isEdit) updateMut.mutate({ id: editStore.id, name: form.name, tradeName: form.tradeName || undefined, regionId: form.regionId || undefined, address: form.address || undefined, city: form.city || undefined, state: form.state || undefined, phone: form.phone || undefined, email: form.email || undefined })
-          else createMut.mutate({ code: form.code, name: form.name, tradeName: form.tradeName || undefined, cnpj: form.cnpj || undefined, regionId: form.regionId || undefined, address: form.address || undefined, city: form.city || undefined, state: form.state || undefined, phone: form.phone || undefined, email: form.email || undefined })
+          if (!form.code || !form.name) { setError('Código e razão social são obrigatórios.'); return }
+          if (isEdit) updateMut.mutate({ id: editStore.id, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined })
+          else createMut.mutate({ code: form.code, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined })
         }} disabled={createMut.isPending || updateMut.isPending}>
-          {createMut.isPending || updateMut.isPending ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar loja'}
+          {createMut.isPending || updateMut.isPending ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar Loja'}
         </Btn>
       </div>
     </>
@@ -105,6 +99,19 @@ export default function StoresPage() {
     >
       {showCreate && <Modal title="Nova Loja" onClose={() => { setShowCreate(false); setError('') }}>{FormContent(false)}</Modal>}
       {editStore && <Modal title={`Editar: ${editStore.name}`} onClose={() => { setEditStore(null); setError('') }}>{FormContent(true)}</Modal>}
+      {deleteStoreId && (
+        <Modal title="Confirmar Exclusão" onClose={() => setDeleteStoreId(null)}>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>
+            Tem certeza que deseja excluir esta loja? Esta ação não pode ser desfeita.
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Btn variant="outline" onClick={() => setDeleteStoreId(null)}>Cancelar</Btn>
+            <Btn variant="danger" onClick={() => deleteMut.mutate({ id: deleteStoreId })} disabled={deleteMut.isPending}>
+              {deleteMut.isPending ? 'Excluindo...' : 'Excluir'}
+            </Btn>
+          </div>
+        </Modal>
+      )}
 
       <DataCard
         title={`Lojas (${data?.meta?.total ?? 0})`}
@@ -146,6 +153,7 @@ export default function StoresPage() {
                         ) : (
                           <button onClick={() => updateMut.mutate({ id: s.id, status: 'ACTIVE' })} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #86efac', background: '#f0fdf4', fontSize: '12px', cursor: 'pointer', color: '#166534' }}>Ativar</button>
                         )}
+                        <button onClick={() => setDeleteStoreId(s.id)} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}>Excluir</button>
                       </div>
                     </td>
                   </tr>

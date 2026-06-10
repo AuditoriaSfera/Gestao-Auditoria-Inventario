@@ -1276,69 +1276,167 @@ model AuditRoundEvidence {
 // ============================================================
 
 model AuditorBaseCost {
-  id         String   @id @default(cuid())
-  auditorId  String
-  monthlyCost Decimal @db.Decimal(15, 4)
-  validFrom  DateTime
-  validUntil DateTime?
-  notes      String?
-  createdBy  String?
+  id          String    @id @default(cuid())
+  auditorId   String
+  monthlyCost Decimal   @db.Decimal(15, 4)
+  validFrom   DateTime
+  validUntil  DateTime?
+  notes       String?
+  createdBy   String?
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([auditorId, validFrom])
   @@map("auditor_base_costs")
 }
 
+model AuditCollaborator {
+  id       String  @id @default(cuid())
+  name     String
+  role     String?
+  phone    String?
+  email    String?
+  isActive Boolean @default(true)
+  createdBy String?
+
+  trips     AuditTrip[]
+  expenses  AuditExpense[]
+  formLinks AuditFormLink[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("audit_collaborators")
+}
+
 model AuditTrip {
-  id          String   @id @default(cuid())
-  auditorId   String
-  regionId    String?
-  description String?
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
-  storesCount Int      @default(0)
-  totalValue  Decimal  @db.Decimal(15, 4) @default(0)
-  status      String   @default("OPEN")  // OPEN, CLOSED
-  observations String? @db.Text
+  id             String   @id @default(cuid())
+  auditorId      String
+  collaboratorId String?
+  regionId       String?
+  description    String?
+  stores         String?
+  city           String?
+  state          String?
+  reason         String?
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  storesCount    Int      @default(0)
+  totalValue     Decimal  @db.Decimal(15, 4) @default(0)
+  releasedAmount Decimal  @db.Decimal(15, 4) @default(0)
+  advancedAmount Decimal  @db.Decimal(15, 4) @default(0)
+  returnedAmount Decimal  @db.Decimal(15, 4) @default(0)
+  returnProofUrl String?
+  returnProofNote String?
+  returnedAt     DateTime?
+  status         String   @default("OPEN")
+  observations   String?  @db.Text
 
-  expenses AuditExpense[]
+  collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
+  expenses     AuditExpense[]
+  formLinks    AuditFormLink[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
   createdBy String?
 
   @@index([auditorId])
+  @@index([collaboratorId])
   @@map("audit_trips")
 }
 
 model AuditExpense {
-  id           String   @id @default(cuid())
-  tripId       String?
-  auditorId    String
-  storeId      String?
-  costCenterId String?
-  type         String   // HOSPEDAGEM, ALIMENTACAO, COMBUSTIVEL, PEDAGIO, ESTACIONAMENTO, PASSAGEM, LOCACAO, OUTRO
-  subtype      String?
-  date         DateTime @db.Date
-  value        Decimal  @db.Decimal(15, 4)
-  description  String?
-  attachmentId String?
-  observations String?
+  id             String   @id @default(cuid())
+  tripId         String?
+  auditorId      String
+  collaboratorId String?
+  storeId        String?
+  costCenterId   String?
+  storeName      String?
+  cityUf         String?
+  paymentMethod  String?
+  attachmentUrl  String?
+  type           String
+  subtype        String?
+  date           DateTime @db.Date
+  value          Decimal  @db.Decimal(15, 4)
+  description    String?
+  attachmentId   String?
+  observations   String?
 
-  trip       AuditTrip?  @relation(fields: [tripId], references: [id])
-  costCenter CostCenter? @relation(fields: [costCenterId], references: [id])
+  trip         AuditTrip?         @relation(fields: [tripId], references: [id])
+  collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
+  costCenter   CostCenter?        @relation(fields: [costCenterId], references: [id])
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  deletedAt  DateTime?
-  createdBy  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  createdBy String?
 
   @@index([auditorId])
+  @@index([collaboratorId])
   @@index([date])
   @@index([type])
   @@map("audit_expenses")
+}
+
+model AuditCostType {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  isActive  Boolean @default(true)
+  createdBy String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("audit_cost_types")
+}
+
+model AuditFormLink {
+  id             String    @id @default(cuid())
+  token          String    @unique @default(cuid())
+  collaboratorId String
+  tripId         String?
+  status         String    @default("NOT_SENT")
+  expiresAt      DateTime?
+  sentAt         DateTime?
+  viewedAt       DateTime?
+  answeredAt     DateTime?
+  createdBy      String?
+
+  collaborator AuditCollaborator @relation(fields: [collaboratorId], references: [id])
+  trip         AuditTrip?        @relation(fields: [tripId], references: [id])
+  response     AuditFormResponse?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("audit_form_links")
+}
+
+model AuditFormResponse {
+  id             String   @id @default(cuid())
+  formLinkId     String   @unique
+  collaboratorId String
+  tripId         String?
+  storeName      String
+  cityUf         String?
+  costCenter     String
+  reason         String
+  paymentMethod  String
+  date           DateTime @db.Date
+  value          Decimal  @db.Decimal(15, 4)
+  observations   String?
+
+  formLink AuditFormLink @relation(fields: [formLinkId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("audit_form_responses")
 }
 
 // ============================================================

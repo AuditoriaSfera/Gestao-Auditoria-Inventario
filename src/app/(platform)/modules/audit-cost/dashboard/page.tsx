@@ -140,8 +140,15 @@ export default function AuditDashboardPage() {
     return names.size
   }, [monthExpenses, tripsInPeriod])
 
-  // Total de inventários = total de viagens no período (cada viagem = 1 inventário)
-  const totalInventories = tripsInPeriod.length
+  // Total de inventários = soma de todas as lojas em todas as viagens do período
+  // Cada loja numa viagem conta como 1 inventário, inclusive repetições entre viagens
+  const totalInventories = useMemo(() =>
+    tripsInPeriod.reduce((sum: number, t: any) => {
+      if (!t.stores) return sum + 1  // viagem sem loja cadastrada conta como 1
+      const stores = t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)
+      return sum + (stores.length || 1)
+    }, 0)
+  , [tripsInPeriod])
 
   // Custo médio por inventário
   const avgPerInventory = totalInventories > 0 ? totalMonthExpenses / totalInventories : 0
@@ -250,7 +257,7 @@ export default function AuditDashboardPage() {
         <KpiCard icon="👥" label="Colaboradores"          value={String(uniqueCollabsInPeriod)} sub="no período" />
         <KpiCard icon="🟢" label="Total Liberado"         value={formatCurrency(totalReleased)} />
         <KpiCard icon="🏪" label="Lojas Inventariadas"    value={String(uniqueStores)} sub="lojas únicas" />
-        <KpiCard icon="📋" label="Inventários Realizados" value={String(totalInventories)} sub="viagens no período" />
+        <KpiCard icon="📋" label="Inventários Realizados" value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
         <KpiCard icon="📊" label="Custo Médio / Inventário" value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
         <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
       </div>

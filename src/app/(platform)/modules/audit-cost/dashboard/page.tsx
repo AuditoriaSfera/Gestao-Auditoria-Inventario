@@ -98,11 +98,23 @@ export default function AuditDashboardPage() {
     [monthExpenses]
   )
 
-  // Dias em viagem: soma dos dias de cada viagem no período
-  const totalDaysInTravel = useMemo(
-    () => tripsInPeriod.reduce((s: number, t: any) => s + calcTripDays(t.startDate, t.endDate), 0),
-    [tripsInPeriod]
-  )
+  // Dias únicos em viagem — datas distintas cobertas por qualquer viagem no período
+  // Se dois colaboradores viajam no mesmo dia, conta como 1 dia
+  const totalDaysInTravel = useMemo(() => {
+    const uniqueDays = new Set<string>()
+    for (const t of tripsInPeriod) {
+      if (!t.startDate) continue
+      const s = new Date(t.startDate)
+      const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) continue
+      const cur = new Date(s)
+      while (cur <= e) {
+        uniqueDays.add(cur.toISOString().slice(0, 10))
+        cur.setDate(cur.getDate() + 1)
+      }
+    }
+    return uniqueDays.size
+  }, [tripsInPeriod])
 
   // Total liberado e colaboradores únicos
   const totalReleased = useMemo(
@@ -147,12 +159,22 @@ export default function AuditDashboardPage() {
       const prev = map.get(key) ?? { name, total: 0, days: 0 }
       map.set(key, { ...prev, total: prev.total + Number(e.value) })
     }
-    // Acumula dias por colaborador
+    // Dias únicos por colaborador (datas distintas nas viagens daquele colaborador)
+    const daysPerCollab = new Map<string, Set<string>>()
     for (const t of tripsInPeriod) {
-      if (t.collaboratorId) {
-        const prev = map.get(t.collaboratorId)
-        if (prev) map.set(t.collaboratorId, { ...prev, days: prev.days + calcTripDays(t.startDate, t.endDate) })
+      if (!t.collaboratorId || !t.startDate) continue
+      if (!daysPerCollab.has(t.collaboratorId)) daysPerCollab.set(t.collaboratorId, new Set())
+      const s = new Date(t.startDate)
+      const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
+      const cur = new Date(s)
+      while (cur <= e) {
+        daysPerCollab.get(t.collaboratorId)!.add(cur.toISOString().slice(0, 10))
+        cur.setDate(cur.getDate() + 1)
       }
+    }
+    for (const [collabId, daysSet] of daysPerCollab) {
+      const prev = map.get(collabId)
+      if (prev) map.set(collabId, { ...prev, days: daysSet.size })
     }
     return Array.from(map.values()).sort((a, b) => b.total - a.total)
   }, [monthExpenses, tripsInPeriod, collabs])
@@ -324,18 +346,26 @@ export default function AuditDashboardPage() {
           }
         </DataCard>
 
-        {/* Dias em viagem por colaborador */}
+        {/* Dias em viagem por colaborador (dias únicos — datas repetidas não somam) */}
         <DataCard title="Dias em Viagem por Colaborador">
           {!tripsInPeriod.length
             ? <EmptyState icon="📅" title="Sem viagens" description="Nenhuma viagem no período." />
             : (() => {
                 const daysMap = new Map<string, { name: string; days: number }>()
+                const setsMap = new Map<string, Set<string>>()
                 for (const t of tripsInPeriod) {
-                  if (!t.collaboratorId) continue
+                  if (!t.collaboratorId || !t.startDate) continue
                   const collab = (collabs as any[])?.find((c: any) => c.id === t.collaboratorId)
                   const name = collab?.name ?? t.collaboratorId.slice(0, 8)
-                  const prev = daysMap.get(t.collaboratorId) ?? { name, days: 0 }
-                  daysMap.set(t.collaboratorId, { ...prev, days: prev.days + calcTripDays(t.startDate, t.endDate) })
+                  if (!daysMap.has(t.collaboratorId)) { daysMap.set(t.collaboratorId, { name, days: 0 }); setsMap.set(t.collaboratorId, new Set()) }
+                  const s = new Date(t.startDate)
+                  const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
+                  const cur = new Date(s)
+                  while (cur <= e) { setsMap.get(t.collaboratorId)!.add(cur.toISOString().slice(0, 10)); cur.setDate(cur.getDate() + 1) }
+                }
+                for (const [id, set] of setsMap) {
+                  const prev = daysMap.get(id)!
+                  daysMap.set(id, { ...prev, days: set.size })
                 }
                 const rows = Array.from(daysMap.values()).sort((a, b) => b.days - a.days)
                 const maxDays = Math.max(...rows.map(r => r.days), 1)

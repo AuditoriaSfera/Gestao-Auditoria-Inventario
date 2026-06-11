@@ -4,11 +4,13 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useMemo } from 'react'
 import { trpc } from '@/lib/trpc'
-import { ModulePage, DataCard, EmptyState, LoadingState } from '@/components/shared/module-page'
+import { ModulePage, DataCard, EmptyState } from '@/components/shared/module-page'
 import { formatCurrency } from '@/lib/utils'
 
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
 
+// ── Componentes de apresentação ───────────────────────────────────────────────
 function KpiCard({ label, value, sub, icon, color }: { label: string; value: string; sub?: string; icon: string; color?: string }) {
   return (
     <div style={{ background: 'white', borderRadius: '14px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
@@ -24,13 +26,16 @@ function KpiCard({ label, value, sub, icon, color }: { label: string; value: str
   )
 }
 
-function Bar({ label, value, max, color = '#3b82f6' }: { label: string; value: number; max: number; color?: string }) {
+function Bar({ label, value, max, color = '#3b82f6', badge }: { label: string; value: number; max: number; color?: string; badge?: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
   return (
     <div style={{ marginBottom: '12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-        <span style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>{label}</span>
-        <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(value)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <span style={{ fontSize: '13px', color: '#374151', fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+          {badge && <span style={{ fontSize: '11px', fontWeight: '700', background: '#dbeafe', color: '#1e40af', padding: '1px 7px', borderRadius: '20px', flexShrink: 0 }}>{badge}</span>}
+        </div>
+        <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', flexShrink: 0, marginLeft: '8px' }}>{formatCurrency(value)}</span>
       </div>
       <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '10px' }}>
         <div style={{ background: color, borderRadius: '6px', height: '10px', width: `${pct}%`, transition: 'width 0.5s' }} />
@@ -39,44 +44,122 @@ function Bar({ label, value, max, color = '#3b82f6' }: { label: string; value: n
   )
 }
 
+// ── Cálculo de dias num intervalo (inclusive em ambas as pontas) ──────────────
+function calcTripDays(startDate: any, endDate: any): number {
+  if (!startDate || !endDate) return 1
+  const s = new Date(startDate)
+  const e = new Date(endDate)
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1
+  const days = Math.round((e.getTime() - s.getTime()) / 86400000) + 1
+  return Math.max(1, days)
+}
+
+// ── Verifica se uma viagem sobrepõe o mês/ano filtrado ───────────────────────
+function tripInPeriod(trip: any, year: number, month: number): boolean {
+  if (!trip.startDate) return false
+  const s = new Date(trip.startDate)
+  const e = trip.endDate ? new Date(trip.endDate) : s
+  const periodStart = new Date(year, month - 1, 1)
+  const periodEnd = new Date(year, month, 0, 23, 59, 59)
+  return s <= periodEnd && e >= periodStart
+}
+
 export default function AuditDashboardPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [filterCollab, setFilterCollab] = useState('')
 
-  const { data: panel, isLoading: panelLoading } = trpc.auditCost.monthlyPanel.useQuery({ year, month, auditorId: filterCollab || undefined })
-  const { data: trips } = trpc.auditTrips.list.useQuery({ pageSize: 100, collaboratorId: filterCollab || undefined })
+  // Queries — trips com pageSize alto para cálculos client-side
+  const { data: tripsData } = trpc.auditTrips.list.useQuery({ pageSize: 500, collaboratorId: filterCollab || undefined })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
-  const { data: formLinks } = trpc.auditForms.listLinks.useQuery()
-  const { data: expenses } = trpc.auditCost.listExpenses.useQuery({ pageSize: 200 })
+  const { data: expenses } = trpc.auditCost.listExpenses.useQuery({ pageSize: 500 })
 
+  // ── Viagens do período ───────────────────────────────────────────────────────
+  const tripsAll = tripsData?.trips ?? []
+  const tripsInPeriod = useMemo(
+    () => tripsAll.filter((t: any) => tripInPeriod(t, year, month)),
+    [tripsAll, year, month]
+  )
+
+  // ── Despesas do período ──────────────────────────────────────────────────────
   const monthExpenses = useMemo(() => {
     if (!expenses?.expenses) return []
     return expenses.expenses.filter((e: any) => {
       const d = new Date(e.date)
-      return d.getFullYear() === year && d.getMonth() + 1 === month
+      return d.getFullYear() === year && d.getMonth() + 1 === month &&
+        (!filterCollab || e.collaboratorId === filterCollab || e.auditorId === filterCollab)
     })
-  }, [expenses, year, month])
+  }, [expenses, year, month, filterCollab])
 
-  // Agrupamentos
+  // ── KPIs principais ──────────────────────────────────────────────────────────
+  const totalMonthExpenses = useMemo(
+    () => monthExpenses.reduce((s: number, e: any) => s + Number(e.value), 0),
+    [monthExpenses]
+  )
+
+  // Dias em viagem: soma dos dias de cada viagem no período
+  const totalDaysInTravel = useMemo(
+    () => tripsInPeriod.reduce((s: number, t: any) => s + calcTripDays(t.startDate, t.endDate), 0),
+    [tripsInPeriod]
+  )
+
+  // Total liberado e colaboradores únicos
+  const totalReleased = useMemo(
+    () => tripsInPeriod.reduce((s: number, t: any) => s + Number(t.releasedAmount ?? 0), 0),
+    [tripsInPeriod]
+  )
+
+  // Colaboradores com despesas no período
+  const uniqueCollabsInPeriod = useMemo(() => {
+    const ids = new Set<string>()
+    for (const e of monthExpenses) { if (e.collaboratorId) ids.add(e.collaboratorId) }
+    for (const t of tripsInPeriod) { if (t.collaboratorId) ids.add(t.collaboratorId) }
+    return ids.size
+  }, [monthExpenses, tripsInPeriod])
+
+  // Lojas únicas inventariadas (pela store nas despesas + nas viagens)
+  const uniqueStores = useMemo(() => {
+    const names = new Set<string>()
+    for (const e of monthExpenses) { if (e.storeName) names.add(e.storeName) }
+    for (const t of tripsInPeriod) {
+      if (t.stores) t.stores.split(',').map((s: string) => s.trim()).filter(Boolean).forEach((s: string) => names.add(s))
+    }
+    return names.size
+  }, [monthExpenses, tripsInPeriod])
+
+  // Total de inventários = total de viagens no período (cada viagem = 1 inventário)
+  const totalInventories = tripsInPeriod.length
+
+  // Custo médio por inventário
+  const avgPerInventory = totalInventories > 0 ? totalMonthExpenses / totalInventories : 0
+
+  // Custo médio por colaborador ativo no período
+  const avgPerCollab = uniqueCollabsInPeriod > 0 ? totalMonthExpenses / uniqueCollabsInPeriod : 0
+
+  // ── Agrupamentos para gráficos ───────────────────────────────────────────────
   const byCollaborator = useMemo(() => {
-    const map = new Map<string, { name: string; total: number }>()
+    const map = new Map<string, { name: string; total: number; days: number }>()
     for (const e of monthExpenses) {
       const key = e.collaboratorId ?? e.auditorId ?? 'Desconhecido'
       const collab = (collabs as any[])?.find((c: any) => c.id === key)
-      const name = collab?.name ?? e.auditorId?.slice(0, 8) ?? 'Desconhecido'
-      const prev = map.get(key) ?? { name, total: 0 }
-      map.set(key, { name, total: prev.total + Number(e.value) })
+      const name = collab?.name ?? key.slice(0, 8)
+      const prev = map.get(key) ?? { name, total: 0, days: 0 }
+      map.set(key, { ...prev, total: prev.total + Number(e.value) })
+    }
+    // Acumula dias por colaborador
+    for (const t of tripsInPeriod) {
+      if (t.collaboratorId) {
+        const prev = map.get(t.collaboratorId)
+        if (prev) map.set(t.collaboratorId, { ...prev, days: prev.days + calcTripDays(t.startDate, t.endDate) })
+      }
     }
     return Array.from(map.values()).sort((a, b) => b.total - a.total)
-  }, [monthExpenses, collabs])
+  }, [monthExpenses, tripsInPeriod, collabs])
 
   const byCostCenter = useMemo(() => {
     const map = new Map<string, number>()
-    for (const e of monthExpenses) {
-      map.set(e.type, (map.get(e.type) ?? 0) + Number(e.value))
-    }
+    for (const e of monthExpenses) map.set(e.type, (map.get(e.type) ?? 0) + Number(e.value))
     return Array.from(map.entries()).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value)
   }, [monthExpenses])
 
@@ -89,38 +172,37 @@ export default function AuditDashboardPage() {
     return Array.from(map.entries()).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value)
   }, [monthExpenses])
 
+  // Por loja: gasto + contagem de inventários (viagens que passaram pela loja)
   const byStore = useMemo(() => {
-    const map = new Map<string, number>()
+    const map = new Map<string, { spent: number; inventories: number }>()
     for (const e of monthExpenses) {
-      const k = e.storeName ?? 'Não informado'
-      map.set(k, (map.get(k) ?? 0) + Number(e.value))
+      if (!e.storeName) continue
+      const prev = map.get(e.storeName) ?? { spent: 0, inventories: 0 }
+      map.set(e.storeName, { ...prev, spent: prev.spent + Number(e.value) })
     }
-    return Array.from(map.entries()).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value).slice(0, 10)
-  }, [monthExpenses])
+    for (const t of tripsInPeriod) {
+      if (!t.stores) continue
+      const names = t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)
+      for (const sn of names) {
+        const prev = map.get(sn) ?? { spent: 0, inventories: 0 }
+        map.set(sn, { ...prev, inventories: prev.inventories + 1 })
+      }
+    }
+    return Array.from(map.entries())
+      .map(([label, d]) => ({ label, ...d }))
+      .sort((a, b) => b.inventories - a.inventories || b.spent - a.spent)
+      .slice(0, 10)
+  }, [monthExpenses, tripsInPeriod])
 
-  const tripsAll = trips?.trips ?? []
-  const totalReleased = tripsAll.reduce((s: number, t: any) => s + Number(t.releasedAmount), 0)
-  const totalSpent = tripsAll.reduce((s: number, t: any) => s + Number(t.spentAmount ?? 0), 0)
-  const totalBalance = totalReleased - totalSpent
-
-  const formsSent = (formLinks as any[])?.length ?? 0
-  const formsAnswered = (formLinks as any[])?.filter((l: any) => l.status === 'ANSWERED').length ?? 0
-
-  const totalMonthExpenses = monthExpenses.reduce((s: number, e: any) => s + Number(e.value), 0)
-  const avgPerTrip = tripsAll.length > 0 ? totalSpent / tripsAll.length : 0
-  const avgPerCollab = byCollaborator.length > 0 ? totalMonthExpenses / byCollaborator.length : 0
-  const uniqueStores = new Set(monthExpenses.map((e: any) => e.storeName).filter(Boolean)).size
   const maxBarVal = Math.max(...byCollaborator.map(c => c.total), 1)
   const maxCcVal = Math.max(...byCostCenter.map(c => c.value), 1)
   const maxPayVal = Math.max(...byPayment.map(c => c.value), 1)
-  const maxStoreVal = Math.max(...byStore.map(c => c.value), 1)
-
-  const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
+  const maxStoreVal = Math.max(...byStore.map(c => c.spent), 1)
 
   return (
     <ModulePage
       title="Dashboard de Auditoria"
-      description="Visão consolidada de viagens, despesas, formulários e orçamento da equipe"
+      description="Visão consolidada de viagens, inventários e despesas da equipe"
     >
       {/* Filtros */}
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -139,96 +221,139 @@ export default function AuditDashboardPage() {
         </select>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — 8 cards, 4 por linha em telas largas */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-        <KpiCard icon="💰" label="Total do Mês" value={formatCurrency(totalMonthExpenses)} />
-        <KpiCard icon="✈️" label="Total de Viagens" value={String(tripsAll.length)} />
-        <KpiCard icon="👥" label="Colaboradores" value={String(byCollaborator.length)} />
-        <KpiCard icon="🟢" label="Total Liberado" value={formatCurrency(totalReleased)} />
-        <KpiCard icon="💳" label="Total Gasto" value={formatCurrency(totalSpent)} color={totalSpent > totalReleased ? '#dc2626' : '#0f172a'} />
-        <KpiCard icon="💵" label="Saldo Disponível" value={formatCurrency(totalBalance)} color={totalBalance < 0 ? '#dc2626' : '#16a34a'} />
-        <KpiCard icon="📋" label="Formulários Enviados" value={String(formsSent)} sub={`${formsAnswered} respondidos`} />
-        <KpiCard icon="🏪" label="Lojas Inventariadas" value={String(uniqueStores)} sub="no período" />
-        <KpiCard icon="📊" label="Custo Médio / Viagem" value={formatCurrency(avgPerTrip)} />
+        <KpiCard icon="💰" label="Total do Mês"           value={formatCurrency(totalMonthExpenses)} />
+        <KpiCard icon="📅" label="Dias em Viagem"         value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
+        <KpiCard icon="👥" label="Colaboradores"          value={String(uniqueCollabsInPeriod)} sub="no período" />
+        <KpiCard icon="🟢" label="Total Liberado"         value={formatCurrency(totalReleased)} />
+        <KpiCard icon="🏪" label="Lojas Inventariadas"    value={String(uniqueStores)} sub="lojas únicas" />
+        <KpiCard icon="📋" label="Inventários Realizados" value={String(totalInventories)} sub="viagens no período" />
+        <KpiCard icon="📊" label="Custo Médio / Inventário" value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
         <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
-        {/* Por Colaborador */}
+
+        {/* Gastos por Colaborador (com dias em viagem) */}
         <DataCard title="Gastos por Colaborador">
-          {!byCollaborator.length ? <EmptyState icon="👥" title="Sem dados" description="Nenhuma despesa no período." /> : (
-            byCollaborator.map((c, i) => <Bar key={c.name} label={c.name} value={c.total} max={maxBarVal} color={BAR_COLORS[i % BAR_COLORS.length]} />)
-          )}
+          {!byCollaborator.length
+            ? <EmptyState icon="👥" title="Sem dados" description="Nenhuma despesa no período." />
+            : byCollaborator.map((c, i) => (
+                <Bar key={c.name} label={c.name} value={c.total} max={maxBarVal}
+                  color={BAR_COLORS[i % BAR_COLORS.length]}
+                  badge={c.days > 0 ? `${c.days}d` : undefined} />
+              ))
+          }
         </DataCard>
 
-        {/* Por Centro de Custo */}
+        {/* Gastos por Centro de Custo */}
         <DataCard title="Gastos por Centro de Custo">
-          {!byCostCenter.length ? <EmptyState icon="📂" title="Sem dados" description="Nenhuma despesa no período." /> : (
-            byCostCenter.map((c, i) => <Bar key={c.label} label={c.label} value={c.value} max={maxCcVal} color={BAR_COLORS[i % BAR_COLORS.length]} />)
-          )}
+          {!byCostCenter.length
+            ? <EmptyState icon="📂" title="Sem dados" description="Nenhuma despesa no período." />
+            : byCostCenter.map((c, i) => (
+                <Bar key={c.label} label={c.label} value={c.value} max={maxCcVal} color={BAR_COLORS[i % BAR_COLORS.length]} />
+              ))
+          }
         </DataCard>
 
         {/* Por Forma de Pagamento */}
         <DataCard title="Por Forma de Pagamento">
-          {!byPayment.length ? <EmptyState icon="💳" title="Sem dados" description="Nenhuma despesa no período." /> : (
-            byPayment.map((c, i) => <Bar key={c.label} label={c.label} value={c.value} max={maxPayVal} color={BAR_COLORS[(i + 2) % BAR_COLORS.length]} />)
-          )}
+          {!byPayment.length
+            ? <EmptyState icon="💳" title="Sem dados" description="Nenhuma despesa no período." />
+            : byPayment.map((c, i) => (
+                <Bar key={c.label} label={c.label} value={c.value} max={maxPayVal} color={BAR_COLORS[(i + 2) % BAR_COLORS.length]} />
+              ))
+          }
         </DataCard>
 
-        {/* Por Loja */}
-        <DataCard title="Gastos por Loja (Top 10)">
-          {!byStore.length ? <EmptyState icon="🏪" title="Sem dados" description="Nenhuma despesa com loja no período." /> : (
-            byStore.map((c, i) => <Bar key={c.label} label={c.label} value={c.value} max={maxStoreVal} color={BAR_COLORS[(i + 4) % BAR_COLORS.length]} />)
-          )}
+        {/* Lojas: gasto + inventários */}
+        <DataCard title="Gastos e Inventários por Loja (Top 10)">
+          {!byStore.length
+            ? <EmptyState icon="🏪" title="Sem dados" description="Nenhuma despesa ou visita com loja no período." />
+            : (
+              <div>
+                {byStore.map((s, i) => (
+                  <Bar key={s.label} label={s.label} value={s.spent} max={maxStoreVal}
+                    color={BAR_COLORS[(i + 4) % BAR_COLORS.length]}
+                    badge={s.inventories > 0 ? `${s.inventories} inv.` : undefined} />
+                ))}
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
+                  Badge azul = quantidade de inventários realizados na loja
+                </div>
+              </div>
+            )
+          }
         </DataCard>
 
-        {/* Liberado vs Gasto por colaborador */}
-        <DataCard title="Orçamento: Liberado vs Gasto">
-          {!tripsAll.length ? <EmptyState icon="📉" title="Sem viagens" description="Cadastre viagens para ver o orçamento." /> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {tripsAll.slice(0, 8).map((t: any) => {
-                const pct = t.releasedAmount > 0 ? Math.min(100, (t.spentAmount / t.releasedAmount) * 100) : 0
-                const over = t.spentAmount > t.releasedAmount
-                return (
-                  <div key={t.id}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '500', color: '#374151' }}>{t.collaborator?.name ?? '—'}</span>
-                      <span style={{ fontSize: '12px', color: over ? '#dc2626' : '#16a34a', fontWeight: '700' }}>
-                        {formatCurrency(t.spentAmount)} / {formatCurrency(t.releasedAmount)}
-                      </span>
+        {/* Orçamento por viagem */}
+        <DataCard title="Orçamento: Liberado vs Gasto por Viagem">
+          {!tripsInPeriod.length
+            ? <EmptyState icon="📉" title="Sem viagens" description="Nenhuma viagem no período selecionado." />
+            : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {tripsInPeriod.slice(0, 8).map((t: any) => {
+                  const spent = Number(t.spentAmount ?? 0)
+                  const released = Number(t.releasedAmount ?? 0)
+                  const pct = released > 0 ? Math.min(100, (spent / released) * 100) : 0
+                  const over = spent > released
+                  const days = calcTripDays(t.startDate, t.endDate)
+                  return (
+                    <div key={t.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t.collaborator?.name ?? '—'}</span>
+                          <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>{days}d</span>
+                        </div>
+                        <span style={{ fontSize: '12px', color: over ? '#dc2626' : '#16a34a', fontWeight: '700' }}>
+                          {formatCurrency(spent)} / {formatCurrency(released)}
+                        </span>
+                      </div>
+                      <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '8px' }}>
+                        <div style={{ background: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e', borderRadius: '6px', height: '8px', width: `${Math.min(100, pct)}%` }} />
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                        {t.reason && <span>{t.reason}</span>}
+                        {t.stores && <span> · {t.stores}</span>}
+                      </div>
                     </div>
-                    <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '8px' }}>
-                      <div style={{ background: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e', borderRadius: '6px', height: '8px', width: `${Math.min(100, pct)}%` }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{t.reason} {t.city ? `· ${t.city}` : ''}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  )
+                })}
+              </div>
+            )
+          }
         </DataCard>
 
-        {/* Status dos formulários */}
-        <DataCard title="Status dos Formulários">
-          {!formLinks?.length ? <EmptyState icon="📋" title="Sem formulários" description="Nenhum link gerado ainda." /> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {[
-                { label: 'Não enviado', key: 'NOT_SENT', color: '#f59e0b', bg: '#fef3c7' },
-                { label: 'Enviado', key: 'SENT', color: '#3b82f6', bg: '#dbeafe' },
-                { label: 'Visualizado', key: 'VIEWED', color: '#8b5cf6', bg: '#ede9fe' },
-                { label: 'Respondido', key: 'ANSWERED', color: '#22c55e', bg: '#dcfce7' },
-              ].map(s => {
-                const count = (formLinks as any[]).filter((l: any) => l.status === s.key).length
-                return (
-                  <div key={s.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: '8px', background: s.bg }}>
-                    <span style={{ fontSize: '13px', fontWeight: '600', color: s.color }}>{s.label}</span>
-                    <span style={{ fontSize: '18px', fontWeight: '800', color: s.color }}>{count}</span>
+        {/* Dias em viagem por colaborador */}
+        <DataCard title="Dias em Viagem por Colaborador">
+          {!tripsInPeriod.length
+            ? <EmptyState icon="📅" title="Sem viagens" description="Nenhuma viagem no período." />
+            : (() => {
+                const daysMap = new Map<string, { name: string; days: number }>()
+                for (const t of tripsInPeriod) {
+                  if (!t.collaboratorId) continue
+                  const collab = (collabs as any[])?.find((c: any) => c.id === t.collaboratorId)
+                  const name = collab?.name ?? t.collaboratorId.slice(0, 8)
+                  const prev = daysMap.get(t.collaboratorId) ?? { name, days: 0 }
+                  daysMap.set(t.collaboratorId, { ...prev, days: prev.days + calcTripDays(t.startDate, t.endDate) })
+                }
+                const rows = Array.from(daysMap.values()).sort((a, b) => b.days - a.days)
+                const maxDays = Math.max(...rows.map(r => r.days), 1)
+                return rows.map((r, i) => (
+                  <div key={r.name} style={{ marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                      <span style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>{r.name}</span>
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{r.days} dia{r.days !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '10px' }}>
+                      <div style={{ background: BAR_COLORS[i % BAR_COLORS.length], borderRadius: '6px', height: '10px', width: `${(r.days / maxDays) * 100}%`, transition: 'width 0.5s' }} />
+                    </div>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                ))
+              })()
+          }
         </DataCard>
+
       </div>
     </ModulePage>
   )

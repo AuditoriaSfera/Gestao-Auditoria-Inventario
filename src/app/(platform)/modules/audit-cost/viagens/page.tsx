@@ -726,6 +726,8 @@ function TabelaVerificacao({ trip }: { trip: any }) {
               const typeGastos = orig ? (gastosByType[type] ?? []) : dayGastos
               const pending = newRows[rowKey] ?? []
               const isFirst = i === 0
+              const totalTypeGasto = typeGastos.reduce((s: number, e: any) => s + Number(e.value), 0)
+              const matched = orig && typeGastos.length > 0 && Math.abs(totalTypeGasto - Number(orig.value)) < 0.01
 
               return (
                 <tr key={`${d}-${i}`} style={{ borderBottom: i === rowCount - 1 ? '2px solid #e2e8f0' : '1px solid #f1f5f9', verticalAlign: 'top' }}>
@@ -741,10 +743,10 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                   {/* ── Solicitação (centro de custo) ── */}
                   <td style={{ padding: '10px 10px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                     {orig ? (
-                      <div style={{ padding: '5px 8px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontSize: '10px', fontWeight: '600', color: '#475569' }}>{orig.type}</div>
-                        {orig.storeName && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{orig.storeName}</div>}
-                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginTop: '3px' }}>{formatCurrency(Number(orig.value))}</div>
+                      <div style={{ padding: '5px 8px', background: matched ? '#dcfce7' : '#f1f5f9', borderRadius: '6px', border: `1px solid ${matched ? '#86efac' : '#e2e8f0'}` }}>
+                        <div style={{ fontSize: '10px', fontWeight: '600', color: matched ? '#166534' : '#475569' }}>{orig.type}</div>
+                        {orig.storeName && <div style={{ fontSize: '10px', color: matched ? '#16a34a' : '#94a3b8', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{orig.storeName}</div>}
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: matched ? '#15803d' : '#0f172a', marginTop: '3px' }}>{formatCurrency(Number(orig.value))}</div>
                       </div>
                     ) : (
                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>
@@ -752,7 +754,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                   </td>
 
                   {/* ── Lançamentos deste centro de custo ── */}
-                  <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0' }}>
+                  <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0', background: matched ? '#f0fdf4' : 'transparent' }}>
                     {typeGastos.map((e: any) => {
                       const attachUrl = attachments[e.id] || e.attachmentUrl || ''
                       const hasAttach = !!attachUrl

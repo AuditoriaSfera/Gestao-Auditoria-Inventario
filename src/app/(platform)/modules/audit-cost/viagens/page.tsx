@@ -1064,6 +1064,9 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
 function AbaViagens() {
   const [page, setPage] = useState(1)
   const [filterCollab, setFilterCollab] = useState('')
+  const [filterSearch, setFilterSearch] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [editTripId, setEditTripId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ reason: '', observations: '', status: 'OPEN' })
@@ -1076,7 +1079,13 @@ function AbaViagens() {
   const [error, setError] = useState('')
 
   const utils = trpc.useUtils()
-  const { data, isLoading } = trpc.auditTrips.list.useQuery({ page, pageSize: 15, collaboratorId: filterCollab || undefined })
+  const { data, isLoading } = trpc.auditTrips.list.useQuery({
+    page, pageSize: 15,
+    collaboratorId: filterCollab || undefined,
+    search: filterSearch || undefined,
+    startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
+    startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
+  })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
   const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
@@ -1195,11 +1204,39 @@ function AbaViagens() {
       )}
 
       {/* Filtros + ação */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
-        <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px', minWidth: '200px' }}>
-          <option value="">Todos os colaboradores</option>
-          {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px', minWidth: '160px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pesquisar</label>
+            <input
+              placeholder="Colaborador, viagem, loja..."
+              value={filterSearch}
+              onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colaborador</label>
+            <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white' }}>
+              <option value="">Todos</option>
+              {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>De</label>
+            <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
+            <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          {(filterCollab || filterSearch || filterFrom || filterTo) && (
+            <button onClick={() => { setFilterCollab(''); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+              style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
+              ✕ Limpar
+            </button>
+          )}
+        </div>
         <Btn onClick={() => setShowNew(true)}>+ Nova Viagem</Btn>
       </div>
 
@@ -1285,23 +1322,59 @@ function AbaViagens() {
 function AbaConcluidas() {
   const [page, setPage] = useState(1)
   const [filterCollab, setFilterCollab] = useState('')
+  const [filterSearch, setFilterSearch] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
   const [prestacaoTripId, setPrestacaoTripId] = useState<string | null>(null)
 
-  const { data, isLoading } = trpc.auditTrips.list.useQuery({ page, pageSize: 15, collaboratorId: filterCollab || undefined, status: 'CLOSED' })
+  const { data, isLoading } = trpc.auditTrips.list.useQuery({
+    page, pageSize: 15, status: 'CLOSED',
+    collaboratorId: filterCollab || undefined,
+    search: filterSearch || undefined,
+    startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
+    startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
+  })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
 
   const trips = data?.trips ?? []
+  const hasFilters = filterCollab || filterSearch || filterFrom || filterTo
 
   return (
     <>
       {prestacaoTripId && prestacaoDetail && <PrestacaoModal trip={prestacaoDetail} onClose={() => setPrestacaoTripId(null)} />}
 
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px', minWidth: '200px' }}>
-          <option value="">Todos os colaboradores</option>
-          {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+      <div style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px', minWidth: '160px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pesquisar</label>
+          <input
+            placeholder="Colaborador, viagem, loja..."
+            value={filterSearch}
+            onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colaborador</label>
+          <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white' }}>
+            <option value="">Todos</option>
+            {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>De</label>
+          <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
+          <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        {hasFilters && (
+          <button onClick={() => { setFilterCollab(''); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+            style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
+            ✕ Limpar
+          </button>
+        )}
       </div>
 
       <DataCard title={`Viagens Concluídas (${data?.meta?.total ?? 0})`}>

@@ -9,6 +9,9 @@ export const auditTripsRouter = createTRPCRouter({
       pageSize: z.number().default(20),
       collaboratorId: z.string().optional(),
       status: z.string().optional(),
+      search: z.string().optional(),
+      startDateFrom: z.date().optional(),
+      startDateTo: z.date().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const { skip, take } = paginate(input.page, input.pageSize)
@@ -16,6 +19,15 @@ export const auditTripsRouter = createTRPCRouter({
         deletedAt: null,
         ...(input.collaboratorId && { collaboratorId: input.collaboratorId }),
         ...(input.status && { status: input.status }),
+        ...(input.search && { OR: [
+          { stores: { contains: input.search, mode: 'insensitive' } },
+          { reason: { contains: input.search, mode: 'insensitive' } },
+          { collaborator: { name: { contains: input.search, mode: 'insensitive' } } },
+        ]}),
+        ...(input.startDateFrom || input.startDateTo ? { startDate: {
+          ...(input.startDateFrom && { gte: input.startDateFrom }),
+          ...(input.startDateTo   && { lte: input.startDateTo }),
+        }} : {}),
       }
       const [trips, total] = await Promise.all([
         ctx.db.auditTrip.findMany({

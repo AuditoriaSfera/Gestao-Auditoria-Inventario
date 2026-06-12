@@ -87,7 +87,12 @@ export const auditTripsRouter = createTRPCRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input
-      return ctx.db.auditTrip.update({ where: { id }, data })
+      const extra: any = {}
+      if (data.status === 'SUBMITTED') {
+        extra.submittedAt = new Date()
+        extra.submittedBy = ctx.session.user.name
+      }
+      return ctx.db.auditTrip.update({ where: { id }, data: { ...data, ...extra } })
     }),
 
   delete: protectedProcedure
@@ -109,6 +114,29 @@ export const auditTripsRouter = createTRPCRouter({
       const { id, ...data } = input
       return ctx.db.auditTrip.update({ where: { id }, data })
     }),
+
+  // Retorna todos os períodos (ano+mês) que têm viagens OU despesas
+  listAvailablePeriods: protectedProcedure.query(async ({ ctx }) => {
+    const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    const [trips, expenses] = await Promise.all([
+      ctx.db.auditTrip.findMany({ where: { deletedAt: null }, select: { startDate: true }, orderBy: { startDate: 'desc' } }),
+      ctx.db.auditExpense.findMany({ where: { deletedAt: null }, select: { date: true }, orderBy: { date: 'desc' } }),
+    ])
+    const seen = new Set<string>()
+    const periods: { year: number; month: number; label: string }[] = []
+    const allDates = [
+      ...trips.map((t: any) => new Date(t.startDate)),
+      ...expenses.map((e: any) => new Date(e.date)),
+    ].filter((d: Date) => !isNaN(d.getTime())).sort((a: Date, b: Date) => b.getTime() - a.getTime())
+    for (const d of allDates) {
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        periods.push({ year: d.getFullYear(), month: d.getMonth() + 1, label: `${MONTHS[d.getMonth()]}/${d.getFullYear()}` })
+      }
+    }
+    return periods
+  }),
 
   exportCsv: protectedProcedure
     .input(z.object({

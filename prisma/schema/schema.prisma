@@ -1332,6 +1332,8 @@ model AuditTrip {
   returnedAt     DateTime?
   status         String   @default("OPEN")
   observations   String?  @db.Text
+  submittedAt    DateTime?
+  submittedBy    String?
 
   collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
   expenses     AuditExpense[]

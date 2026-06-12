@@ -866,12 +866,21 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const isClosed = trip.status === 'CLOSED'
   const isSubmitted = trip.status === 'SUBMITTED'
   const [saving, setSaving] = useState(false)
+  const [enviarError, setEnviarError] = useState('')
+
+  const missingComprovante = gastoExpenses.filter((e: any) => !e.attachmentUrl)
+  const canEnviar = missingComprovante.length === 0
 
   const updateStatusMut = trpc.auditTrips.update.useMutation({
     onSuccess: () => { utils.auditTrips.list.invalidate(); utils.auditTrips.getById.invalidate({ id: trip.id }); setSaving(false) },
     onError: () => setSaving(false),
   })
-  function handleEnviar() { setSaving(true); updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' }) }
+  function handleEnviar() {
+    if (!canEnviar) { setEnviarError(`${missingComprovante.length} lançamento(s) sem comprovante anexado.`); return }
+    setEnviarError('')
+    setSaving(true)
+    updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' })
+  }
   function handleValidar() { setSaving(true); updateStatusMut.mutate({ id: trip.id, status: 'CLOSED' }) }
 
   // ── Status banner config ──────────────────────────────────────────────────
@@ -935,11 +944,17 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
         ) : isSubmitted ? (
           <>
             <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Prestação enviada — aguardando validação do financeiro.</div>
+            {trip.submittedBy && (
+              <div style={{ fontSize: '12px', color: '#92400e', opacity: 0.8 }}>
+                Enviado por <strong>{trip.submittedBy}</strong> em {trip.submittedAt ? new Date(trip.submittedAt).toLocaleString('pt-BR') : '—'}
+              </div>
+            )}
             <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
           </>
         ) : (
           <>
             <div style={{ color: '#64748b', fontSize: '13px' }}>Revise os lançamentos acima e envie a prestação de contas para validação.</div>
+            {enviarError && <div style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600' }}>⚠ {enviarError}</div>}
             <Btn onClick={handleEnviar} disabled={saving}>{saving ? 'Enviando...' : '📤 Enviar Prestação de Contas'}</Btn>
           </>
         )}

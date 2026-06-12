@@ -2,6 +2,11 @@ import { z } from 'zod'
 import { createTRPCRouter, protectedProcedure } from '@/server/trpc/init'
 import { paginate, buildPaginationMeta } from '@/lib/utils'
 
+function appendEvent(current: string | null | undefined, event: object): string {
+  const arr = current ? JSON.parse(current) : []
+  return JSON.stringify([...arr, { ...event, date: new Date().toISOString() }])
+}
+
 export const auditTripsRouter = createTRPCRouter({
   list: protectedProcedure
     .input(z.object({
@@ -107,15 +112,33 @@ export const auditTripsRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input
       const extra: any = {}
-      if (data.status === 'SUBMITTED') {
-        extra.submittedAt = new Date()
-        extra.submittedBy = ctx.session.user.name ?? ctx.session.user.email ?? 'Colaborador'
-      }
-      if (data.status === 'CLOSED') {
-        extra.validatedAt = new Date()
-        extra.validatedBy = ctx.session.user.name ?? ctx.session.user.email ?? 'Financeiro'
+      const userName = ctx.session.user.name ?? ctx.session.user.email ?? 'Usuário'
+      if (data.status === 'SUBMITTED' || data.status === 'CLOSED') {
+        const current = await ctx.db.auditTrip.findUnique({ where: { id }, select: { timeline: true } })
+        if (data.status === 'SUBMITTED') {
+          extra.submittedAt = new Date()
+          extra.submittedBy = userName
+          extra.timeline = appendEvent(current?.timeline, { type: 'submitted', user: userName })
+        }
+        if (data.status === 'CLOSED') {
+          extra.validatedAt = new Date()
+          extra.validatedBy = userName
+          extra.timeline = appendEvent(current?.timeline, { type: 'validated', user: userName })
+        }
       }
       return ctx.db.auditTrip.update({ where: { id }, data: { ...data, ...extra } })
+    }),
+
+  reject: protectedProcedure
+    .input(z.object({ id: z.string(), reason: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const userName = ctx.session.user.name ?? ctx.session.user.email ?? 'Financeiro'
+      const current = await ctx.db.auditTrip.findUnique({ where: { id: input.id }, select: { timeline: true } })
+      const timeline = appendEvent(current?.timeline, { type: 'rejected', user: userName, comment: input.reason })
+      return ctx.db.auditTrip.update({
+        where: { id: input.id },
+        data: { status: 'OPEN', rejectedAt: new Date(), rejectedBy: userName, rejectionReason: input.reason, timeline },
+      })
     }),
 
   delete: protectedProcedure

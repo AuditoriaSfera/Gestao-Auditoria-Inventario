@@ -931,23 +931,27 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const balanced = Math.abs(balance) < 0.01
   const isClosed    = trip.status === 'CLOSED'
   const isSubmitted = trip.status === 'SUBMITTED'
+  const isRejected  = !isClosed && !isSubmitted && !!trip.rejectedAt
+
   const [saving, setSaving] = useState(false)
   const [enviarError, setEnviarError] = useState('')
   const [returnAmount, setReturnAmount] = useState('')
   const [returnProofUrl, setReturnProofUrl] = useState(trip.returnProofUrl ?? '')
   const returnFileRef = useRef<HTMLInputElement>(null)
+  const [showRejectForm, setShowRejectForm] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectError, setRejectError] = useState('')
 
   const missingComprovante = gastoExpenses.filter((e: any) => !e.attachmentUrl)
   const canEnviar = missingComprovante.length === 0
 
-  const updateStatusMut = trpc.auditTrips.update.useMutation({
-    onSuccess: () => { utils.auditTrips.list.invalidate(); utils.auditTrips.getById.invalidate({ id: trip.id }); setSaving(false) },
-    onError: () => setSaving(false),
-  })
+  const invalidate = () => { utils.auditTrips.list.invalidate(); utils.auditTrips.getById.invalidate({ id: trip.id }); setSaving(false) }
+  const updateStatusMut    = trpc.auditTrips.update.useMutation({ onSuccess: invalidate, onError: () => setSaving(false) })
   const updateSettlementMut = trpc.auditTrips.updateSettlement.useMutation({
     onSuccess: () => { updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' }) },
     onError: () => setSaving(false),
   })
+  const rejectMut = trpc.auditTrips.reject.useMutation({ onSuccess: invalidate, onError: () => setSaving(false) })
 
   function handleReturnFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0]
@@ -961,29 +965,28 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     if (!canEnviar) { setEnviarError(`${missingComprovante.length} lançamento(s) sem comprovante anexado.`); return }
     if (toReturn > 0) {
       const amt = parseFloat(returnAmount.replace(',', '.'))
-      if (isNaN(amt) || Math.abs(amt - toReturn) > 0.01) {
-        setEnviarError(`O valor informado deve ser exatamente ${formatCurrency(toReturn)}.`)
-        return
-      }
-      if (!returnProofUrl) {
-        setEnviarError('Anexe o comprovante de devolução antes de enviar.')
-        return
-      }
-      setEnviarError('')
-      setSaving(true)
+      if (isNaN(amt) || Math.abs(amt - toReturn) > 0.01) { setEnviarError(`O valor informado deve ser exatamente ${formatCurrency(toReturn)}.`); return }
+      if (!returnProofUrl) { setEnviarError('Anexe o comprovante de devolução antes de enviar.'); return }
+      setEnviarError(''); setSaving(true)
       updateSettlementMut.mutate({ id: trip.id, returnedAmount: toReturn, returnProofUrl, returnedAt: new Date() })
       return
     }
-    setEnviarError('')
-    setSaving(true)
+    setEnviarError(''); setSaving(true)
     updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' })
   }
   function handleValidar() { setSaving(true); updateStatusMut.mutate({ id: trip.id, status: 'CLOSED' }) }
+  function handleRejeitar() {
+    if (!rejectReason.trim()) { setRejectError('Informe o motivo da rejeição.'); return }
+    setRejectError(''); setSaving(true)
+    rejectMut.mutate({ id: trip.id, reason: rejectReason.trim() })
+  }
 
-  const statusConfig = isClosed || balanced
-    ? { bg: '#f0fdf4', border: '#86efac', dot: '#22c55e', text: '#166534', icon: '✓', msg: balanced ? 'Valores perfeitamente compensados.' : 'Prestação validada e concluída.' }
+  const statusConfig = isClosed
+    ? { bg: '#f0fdf4', border: '#86efac', dot: '#22c55e', text: '#166534', icon: '✓', msg: 'Prestação validada e concluída.' }
     : isSubmitted
     ? { bg: '#fef9c3', border: '#fde68a', dot: '#f59e0b', text: '#92400e', icon: '⏳', msg: 'Prestação enviada — aguardando validação do financeiro.' }
+    : isRejected
+    ? { bg: '#fef2f2', border: '#fca5a5', dot: '#ef4444', text: '#991b1b', icon: '✗', msg: 'Prestação rejeitada — colaborador deve corrigir e reenviar.' }
     : toReturn > 0
       ? { bg: '#fef2f2', border: '#fca5a5', dot: '#ef4444', text: '#991b1b', icon: '↩', msg: `Colaborador deve devolver ${formatCurrency(toReturn)} à empresa.` }
       : { bg: '#eff6ff', border: '#93c5fd', dot: '#3b82f6', text: '#1e40af', icon: '↪', msg: `Empresa deve reembolsar ${formatCurrency(toReceive)} ao colaborador.` }
@@ -998,13 +1001,24 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     )
   }
 
-  // History sempre mostra entradas com base no status, mesmo sem dados de usuário/data
-  const history: { icon: string; label: string; user: string | null; date: string | null; color: string }[] = []
-  if (isSubmitted || isClosed) {
-    history.push({ icon: '📤', label: 'Prestação enviada', user: trip.submittedBy ?? null, date: trip.submittedAt ? new Date(trip.submittedAt).toLocaleString('pt-BR') : null, color: '#92400e' })
-  }
-  if (isClosed) {
-    history.push({ icon: '✅', label: 'Prestação validada', user: trip.validatedBy ?? null, date: trip.validatedAt ? new Date(trip.validatedAt).toLocaleString('pt-BR') : null, color: '#166534' })
+  // Timeline acumulada — usa campo JSON se disponível, senão reconstrói dos campos legados
+  type TLEvent = { type: string; user?: string; date?: string; comment?: string }
+  const timeline: TLEvent[] = (() => {
+    if (trip.timeline) {
+      try { return JSON.parse(trip.timeline) } catch { return [] }
+    }
+    // fallback para viagens antigas sem timeline
+    const evts: TLEvent[] = []
+    if (trip.submittedBy || trip.submittedAt) evts.push({ type: 'submitted', user: trip.submittedBy ?? undefined, date: trip.submittedAt ?? undefined })
+    if (trip.rejectedBy  || trip.rejectedAt)  evts.push({ type: 'rejected',  user: trip.rejectedBy  ?? undefined, date: trip.rejectedAt  ?? undefined, comment: trip.rejectionReason ?? undefined })
+    if (trip.validatedBy || trip.validatedAt) evts.push({ type: 'validated', user: trip.validatedBy ?? undefined, date: trip.validatedAt ?? undefined })
+    return evts
+  })()
+
+  const tlConfig: Record<string, { icon: string; label: string; color: string; bg: string; border: string }> = {
+    submitted: { icon: '📤', label: 'Prestação enviada',   color: '#92400e', bg: 'white',   border: '#e2e8f0' },
+    validated: { icon: '✅', label: 'Prestação validada',  color: '#166534', bg: '#f0fdf4', border: '#86efac' },
+    rejected:  { icon: '❌', label: 'Prestação rejeitada', color: '#991b1b', bg: '#fef2f2', border: '#fca5a5' },
   }
 
   return (
@@ -1019,11 +1033,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
           <div style={{ fontSize: '15px', fontWeight: '700', color: statusConfig.text }}>{statusConfig.msg}</div>
           {trip.stores && <div style={{ fontSize: '12px', color: statusConfig.text, opacity: 0.75, marginTop: '2px' }}>Viagem: {trip.stores} · {trip.reason ?? ''}</div>}
         </div>
-        {isClosed && (
-          <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>CONCLUÍDA</div>
-          </div>
-        )}
+        {isClosed && <div style={{ marginLeft: 'auto', flexShrink: 0 }}><div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>CONCLUÍDA</div></div>}
       </div>
 
       {/* ── Cards de resumo */}
@@ -1041,72 +1051,102 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
       </div>
 
       {/* ── Ação */}
-      <div style={{ background: isClosed ? '#f0fdf4' : isSubmitted ? '#fef9c3' : '#f8fafc', border: `2px solid ${isClosed ? '#86efac' : isSubmitted ? '#fde68a' : '#e2e8f0'}`, borderRadius: '14px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', textAlign: 'center' }}>
+      <div style={{ background: isClosed ? '#f0fdf4' : isSubmitted ? '#fef9c3' : isRejected ? '#fef2f2' : '#f8fafc', border: `2px solid ${isClosed ? '#86efac' : isSubmitted ? '#fde68a' : isRejected ? '#fca5a5' : '#e2e8f0'}`, borderRadius: '14px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-        {/* Histórico acumulado */}
-        {history.length > 0 && (
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {history.map((h, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'white', borderRadius: '10px', border: '1.5px solid #e2e8f0', textAlign: 'left' }}>
-                <span style={{ fontSize: '18px' }}>{h.icon}</span>
-                <div>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: h.color }}>
-                    {h.label}{h.user ? <> por <strong>{h.user}</strong></> : ''}
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>
-                    {h.date ? `em ${h.date}` : '(data não disponível)'}
-                  </span>
+        {/* ── Histórico completo (timeline) */}
+        {timeline.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2px' }}>Histórico</div>
+            {timeline.map((ev, i) => {
+              const cfg = tlConfig[ev.type] ?? tlConfig.submitted
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', background: cfg.bg, borderRadius: '10px', border: `1.5px solid ${cfg.border}`, textAlign: 'left' }}>
+                  <span style={{ fontSize: '18px', flexShrink: 0 }}>{cfg.icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div>
+                      <span style={{ fontSize: '13px', fontWeight: '700', color: cfg.color }}>
+                        {cfg.label}{ev.user ? <> por <strong>{ev.user}</strong></> : ''}
+                      </span>
+                      {ev.date && <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>em {new Date(ev.date).toLocaleString('pt-BR')}</span>}
+                    </div>
+                    {ev.comment && (
+                      <div style={{ fontSize: '12px', color: '#991b1b', marginTop: '4px', background: '#fff', borderRadius: '6px', padding: '6px 10px', border: '1px solid #fca5a5' }}>
+                        💬 <em>{ev.comment}</em>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
+        {/* ── Ações conforme status */}
         {isClosed ? (
-          <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px' }}>✓ Viagem concluída e validada pelo financeiro.</div>
+          <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px', textAlign: 'center' }}>✓ Viagem concluída e validada pelo financeiro.</div>
         ) : isSubmitted ? (
-          <>
-            <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Prestação enviada — aguardando validação do financeiro.</div>
-            <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
-          </>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+            <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Aguardando validação do financeiro.</div>
+            {!showRejectForm ? (
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
+                <Btn variant="danger" onClick={() => setShowRejectForm(true)} disabled={saving}>❌ Rejeitar</Btn>
+              </div>
+            ) : (
+              <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>Motivo da rejeição</div>
+                <textarea
+                  autoFocus
+                  placeholder="Descreva o motivo da rejeição para o colaborador..."
+                  value={rejectReason}
+                  onChange={e => setRejectReason(e.target.value)}
+                  rows={3}
+                  style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', resize: 'vertical', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                />
+                {rejectError && <div style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600' }}>⚠ {rejectError}</div>}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <Btn variant="outline" onClick={() => { setShowRejectForm(false); setRejectReason(''); setRejectError('') }} disabled={saving}>Cancelar</Btn>
+                  <Btn variant="danger" onClick={handleRejeitar} disabled={saving}>{saving ? 'Rejeitando...' : '❌ Confirmar Rejeição'}</Btn>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
-          <>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
+            {isRejected && (
+              <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '10px', padding: '12px 16px', textAlign: 'left' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>❌ Prestação rejeitada — corrija os itens indicados e reenvie.</div>
+              </div>
+            )}
             {toReturn > 0 && (
               <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px', padding: '16px 20px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>
-                  ↩ Você deve devolver <strong>{formatCurrency(toReturn)}</strong> à empresa. Informe o valor e anexe o comprovante de devolução.
+                  ↩ Você deve devolver <strong>{formatCurrency(toReturn)}</strong> à empresa. Informe o valor e anexe o comprovante.
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Valor devolvido (R$)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder={toReturn.toFixed(2)}
-                      value={returnAmount}
-                      onChange={e => setReturnAmount(e.target.value)}
-                      style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', fontWeight: '700', width: '160px', color: '#991b1b', background: 'white', outline: 'none' }}
-                    />
+                    <input type="number" step="0.01" placeholder={toReturn.toFixed(2)} value={returnAmount} onChange={e => setReturnAmount(e.target.value)}
+                      style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', fontWeight: '700', width: '160px', color: '#991b1b', background: 'white', outline: 'none' }} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Comprovante de devolução</label>
                     <input ref={returnFileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleReturnFileChange} />
-                    <button
-                      onClick={() => returnFileRef.current?.click()}
-                      style={{ border: `1.5px solid ${returnProofUrl ? '#22c55e' : '#ef4444'}`, borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: returnProofUrl ? '#f0fdf4' : '#fff', color: returnProofUrl ? '#166534' : '#dc2626', cursor: 'pointer' }}
-                    >
+                    <button onClick={() => returnFileRef.current?.click()}
+                      style={{ border: `1.5px solid ${returnProofUrl ? '#22c55e' : '#ef4444'}`, borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: returnProofUrl ? '#f0fdf4' : '#fff', color: returnProofUrl ? '#166534' : '#dc2626', cursor: 'pointer' }}>
                       {returnProofUrl ? '✓ Comprovante anexado' : '📎 Anexar comprovante'}
                     </button>
                   </div>
                 </div>
               </div>
             )}
-            {!toReturn && <div style={{ color: '#64748b', fontSize: '13px' }}>Revise os lançamentos acima e envie a prestação de contas para validação.</div>}
+            {!toReturn && !isRejected && <div style={{ color: '#64748b', fontSize: '13px' }}>Revise os lançamentos acima e envie a prestação de contas para validação.</div>}
             {enviarError && <div style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600' }}>⚠ {enviarError}</div>}
             <Btn onClick={handleEnviar} disabled={saving}>{saving ? 'Enviando...' : '📤 Enviar Prestação de Contas'}</Btn>
-          </>
+          </div>
         )}
-        <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Btn variant="outline" onClick={onClose}>Fechar</Btn>
         </div>
       </div>

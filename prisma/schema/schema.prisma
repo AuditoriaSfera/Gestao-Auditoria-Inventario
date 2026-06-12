@@ -1332,10 +1332,14 @@ model AuditTrip {
   returnedAt     DateTime?
   status         String   @default("OPEN")
   observations   String?  @db.Text
-  submittedAt    DateTime?
-  submittedBy    String?
-  validatedAt    DateTime?
-  validatedBy    String?
+  submittedAt     DateTime?
+  submittedBy     String?
+  validatedAt     DateTime?
+  validatedBy     String?
+  rejectedAt      DateTime?
+  rejectedBy      String?
+  rejectionReason String?   @db.Text
+  timeline        String?   @db.Text
 
   collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
   expenses     AuditExpense[]

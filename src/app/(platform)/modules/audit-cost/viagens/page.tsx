@@ -853,20 +853,21 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const utils = trpc.useUtils()
   const expenses: any[] = trip.expenses ?? []
-  // Lançamentos de gasto (subtype === 'gasto') = o que o colaborador realmente gastou
   const gastoExpenses    = expenses.filter((e: any) => e.subtype === 'gasto')
   const originalExpenses = expenses.filter((e: any) => e.subtype !== 'gasto')
   const spentAmount    = gastoExpenses.reduce((s: number, e: any) => s + Number(e.value), 0)
-  // advancedAmount = soma das solicitações originais (o que foi adiantado por linha de despesa)
   const advancedAmount = originalExpenses.reduce((s: number, e: any) => s + Number(e.value), 0) || Number(trip.advancedAmount ?? 0)
-  const balance = advancedAmount - spentAmount          // + = deve devolver  /  - = deve receber
+  const balance = advancedAmount - spentAmount
   const toReturn  = Math.max(0, balance)
   const toReceive = Math.max(0, -balance)
   const balanced = Math.abs(balance) < 0.01
-  const isClosed = trip.status === 'CLOSED'
+  const isClosed    = trip.status === 'CLOSED'
   const isSubmitted = trip.status === 'SUBMITTED'
   const [saving, setSaving] = useState(false)
   const [enviarError, setEnviarError] = useState('')
+  const [returnAmount, setReturnAmount] = useState('')
+  const [returnProofUrl, setReturnProofUrl] = useState(trip.returnProofUrl ?? '')
+  const returnFileRef = useRef<HTMLInputElement>(null)
 
   const missingComprovante = gastoExpenses.filter((e: any) => !e.attachmentUrl)
   const canEnviar = missingComprovante.length === 0
@@ -875,15 +876,42 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     onSuccess: () => { utils.auditTrips.list.invalidate(); utils.auditTrips.getById.invalidate({ id: trip.id }); setSaving(false) },
     onError: () => setSaving(false),
   })
+  const updateSettlementMut = trpc.auditTrips.updateSettlement.useMutation({
+    onSuccess: () => { updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' }) },
+    onError: () => setSaving(false),
+  })
+
+  function handleReturnFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = e => { setReturnProofUrl(e.target?.result as string) }
+    reader.readAsDataURL(file)
+  }
+
   function handleEnviar() {
     if (!canEnviar) { setEnviarError(`${missingComprovante.length} lançamento(s) sem comprovante anexado.`); return }
+    if (toReturn > 0) {
+      const amt = parseFloat(returnAmount.replace(',', '.'))
+      if (isNaN(amt) || Math.abs(amt - toReturn) > 0.01) {
+        setEnviarError(`O valor informado deve ser exatamente ${formatCurrency(toReturn)}.`)
+        return
+      }
+      if (!returnProofUrl) {
+        setEnviarError('Anexe o comprovante de devolução antes de enviar.')
+        return
+      }
+      setEnviarError('')
+      setSaving(true)
+      updateSettlementMut.mutate({ id: trip.id, returnedAmount: toReturn, returnProofUrl, returnedAt: new Date() })
+      return
+    }
     setEnviarError('')
     setSaving(true)
     updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' })
   }
   function handleValidar() { setSaving(true); updateStatusMut.mutate({ id: trip.id, status: 'CLOSED' }) }
 
-  // ── Status banner config ──────────────────────────────────────────────────
   const statusConfig = isClosed || balanced
     ? { bg: '#f0fdf4', border: '#86efac', dot: '#22c55e', text: '#166534', icon: '✓', msg: balanced ? 'Valores perfeitamente compensados.' : 'Prestação validada e concluída.' }
     : isSubmitted
@@ -892,7 +920,6 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
       ? { bg: '#fef2f2', border: '#fca5a5', dot: '#ef4444', text: '#991b1b', icon: '↩', msg: `Colaborador deve devolver ${formatCurrency(toReturn)} à empresa.` }
       : { bg: '#eff6ff', border: '#93c5fd', dot: '#3b82f6', text: '#1e40af', icon: '↪', msg: `Empresa deve reembolsar ${formatCurrency(toReceive)} ao colaborador.` }
 
-  // ── Card helper ───────────────────────────────────────────────────────────
   function SummaryCard({ label, value, sub, color, bg, border }: { label: string; value: string; sub?: string; color: string; bg: string; border: string }) {
     return (
       <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px', flex: '1 1 120px', minWidth: '110px' }}>
@@ -903,11 +930,14 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     )
   }
 
+  const history: { icon: string; label: string; user: string; date: string; color: string }[] = []
+  if (trip.submittedBy) history.push({ icon: '📤', label: 'Enviado', user: trip.submittedBy, date: trip.submittedAt ? new Date(trip.submittedAt).toLocaleString('pt-BR') : '—', color: '#92400e' })
+  if (trip.validatedBy)  history.push({ icon: '✅', label: 'Validado', user: trip.validatedBy,  date: trip.validatedAt  ? new Date(trip.validatedAt).toLocaleString('pt-BR')  : '—', color: '#166534' })
 
   return (
     <Modal title={`Prestação de Contas — ${trip.collaborator?.name ?? ''}`} onClose={onClose} wide>
 
-      {/* ── Status Banner ─────────────────────────────────────────────────── */}
+      {/* ── Status Banner */}
       <div style={{ background: statusConfig.bg, border: `2px solid ${statusConfig.border}`, borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: statusConfig.dot, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <span style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>{statusConfig.icon}</span>
@@ -923,7 +953,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
         )}
       </div>
 
-      {/* ── Cards de resumo ───────────────────────────────────────────────── */}
+      {/* ── Cards de resumo */}
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
         <SummaryCard label="Adiantado"   value={formatCurrency(advancedAmount)} color="#6d28d9" bg="#f5f3ff" border="#c4b5fd" />
         <SummaryCard label="Total Gasto" value={formatCurrency(spentAmount)} sub={`${gastoExpenses.length} lançamento${gastoExpenses.length !== 1 ? 's' : ''}`} color="#92400e" bg="#fffbeb" border="#fde68a" />
@@ -931,29 +961,70 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
         <SummaryCard label="Reembolso"   value={formatCurrency(toReceive)} color={toReceive > 0 ? '#1e40af' : '#94a3b8'} bg={toReceive > 0 ? '#eff6ff' : '#f8fafc'} border={toReceive > 0 ? '#93c5fd' : '#e2e8f0'} sub={toReceive > 0 ? 'empresa → colaborador' : undefined} />
       </div>
 
-      {/* ── Lançamentos por dia ───────────────────────────────────────────── */}
+      {/* ── Lançamentos por dia */}
       <div style={{ fontSize: '13px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Verificação por Dia</div>
       <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '24px' }}>
         <TabelaVerificacao trip={trip} />
       </div>
 
-      {/* ── Ação ─────────────────────────────────────────────────────────── */}
+      {/* ── Ação */}
       <div style={{ background: isClosed ? '#f0fdf4' : isSubmitted ? '#fef9c3' : '#f8fafc', border: `2px solid ${isClosed ? '#86efac' : isSubmitted ? '#fde68a' : '#e2e8f0'}`, borderRadius: '14px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', textAlign: 'center' }}>
+
+        {/* Histórico acumulado */}
+        {history.length > 0 && (
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {history.map((h, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'white', borderRadius: '10px', border: '1.5px solid #e2e8f0', textAlign: 'left' }}>
+                <span style={{ fontSize: '18px' }}>{h.icon}</span>
+                <div>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: h.color }}>{h.label} por <strong>{h.user}</strong></span>
+                  <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>em {h.date}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {isClosed ? (
           <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px' }}>✓ Viagem concluída e validada pelo financeiro.</div>
         ) : isSubmitted ? (
           <>
             <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Prestação enviada — aguardando validação do financeiro.</div>
-            {trip.submittedBy && (
-              <div style={{ fontSize: '12px', color: '#92400e', opacity: 0.8 }}>
-                Enviado por <strong>{trip.submittedBy}</strong> em {trip.submittedAt ? new Date(trip.submittedAt).toLocaleString('pt-BR') : '—'}
-              </div>
-            )}
             <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
           </>
         ) : (
           <>
-            <div style={{ color: '#64748b', fontSize: '13px' }}>Revise os lançamentos acima e envie a prestação de contas para validação.</div>
+            {toReturn > 0 && (
+              <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px', padding: '16px 20px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>
+                  ↩ Você deve devolver <strong>{formatCurrency(toReturn)}</strong> à empresa. Informe o valor e anexe o comprovante de devolução.
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Valor devolvido (R$)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder={toReturn.toFixed(2)}
+                      value={returnAmount}
+                      onChange={e => setReturnAmount(e.target.value)}
+                      style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', fontWeight: '700', width: '160px', color: '#991b1b', background: 'white', outline: 'none' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Comprovante de devolução</label>
+                    <input ref={returnFileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleReturnFileChange} />
+                    <button
+                      onClick={() => returnFileRef.current?.click()}
+                      style={{ border: `1.5px solid ${returnProofUrl ? '#22c55e' : '#ef4444'}`, borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: returnProofUrl ? '#f0fdf4' : '#fff', color: returnProofUrl ? '#166534' : '#dc2626', cursor: 'pointer' }}
+                    >
+                      {returnProofUrl ? '✓ Comprovante anexado' : '📎 Anexar comprovante'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!toReturn && <div style={{ color: '#64748b', fontSize: '13px' }}>Revise os lançamentos acima e envie a prestação de contas para validação.</div>}
             {enviarError && <div style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600' }}>⚠ {enviarError}</div>}
             <Btn onClick={handleEnviar} disabled={saving}>{saving ? 'Enviando...' : '📤 Enviar Prestação de Contas'}</Btn>
           </>

@@ -1334,6 +1334,8 @@ model AuditTrip {
   observations   String?  @db.Text
   submittedAt    DateTime?
   submittedBy    String?
+  validatedAt    DateTime?
+  validatedBy    String?
 
   collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
   expenses     AuditExpense[]

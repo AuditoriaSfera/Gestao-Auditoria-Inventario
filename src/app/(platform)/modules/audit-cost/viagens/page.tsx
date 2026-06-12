@@ -1269,6 +1269,7 @@ function AbaViagens() {
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'' | 'OPEN' | 'SUBMITTED' | 'REJECTED'>('')
   const [showNew, setShowNew] = useState(false)
   const [editTripId, setEditTripId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ reason: '', observations: '', status: 'OPEN' })
@@ -1281,13 +1282,16 @@ function AbaViagens() {
   const [error, setError] = useState('')
 
   const utils = trpc.useUtils()
+  const queryStatusIn = filterStatus === 'SUBMITTED' ? ['SUBMITTED'] : ['OPEN', 'SUBMITTED']
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
     page, pageSize: 50,
-    statusIn: ['OPEN', 'SUBMITTED'],
+    statusIn: queryStatusIn,
     collaboratorIds: filterCollabs.length ? filterCollabs : undefined,
     search: filterSearch || undefined,
     startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
     startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
+    rejectedOnly: filterStatus === 'REJECTED' ? true : undefined,
+    excludeRejected: filterStatus === 'OPEN' ? true : undefined,
   })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
@@ -1430,8 +1434,18 @@ function AbaViagens() {
             <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
             <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
           </div>
-          {!!(filterCollabs.length || filterSearch || filterFrom || filterTo) && (
-            <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label>
+            <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as any); setPage(1) }}
+              style={{ padding: '8px 10px', borderRadius: '8px', border: `1.5px solid ${filterStatus === 'REJECTED' ? '#fca5a5' : filterStatus === 'SUBMITTED' ? '#fde68a' : '#e2e8f0'}`, fontSize: '13px', background: filterStatus === 'REJECTED' ? '#fef2f2' : filterStatus === 'SUBMITTED' ? '#fef9c3' : 'white', color: filterStatus === 'REJECTED' ? '#991b1b' : filterStatus === 'SUBMITTED' ? '#92400e' : '#0f172a', minWidth: '120px' }}>
+              <option value="">Todos</option>
+              <option value="OPEN">Aberta</option>
+              <option value="SUBMITTED">Enviada</option>
+              <option value="REJECTED">Rejeitada</option>
+            </select>
+          </div>
+          {!!(filterCollabs.length || filterSearch || filterFrom || filterTo || filterStatus) && (
+            <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setFilterStatus(''); setPage(1) }}
               style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
               ✕ Limpar
             </button>
@@ -1448,12 +1462,15 @@ function AbaViagens() {
             {groups.map((g: any) => {
               const isOpen = expandedGroup === g.key
               const totalSpent = g.trips.reduce((s: number, t: any) => s + Number(t.spentAmount ?? 0), 0)
-              const allSubmitted = g.trips.every((t: any) => t.status === 'SUBMITTED')
+              const anyRejected  = g.trips.some((t: any) => t.status === 'OPEN' && t.rejectedAt)
+              const anySubmitted = g.trips.some((t: any) => t.status === 'SUBMITTED')
+              const groupBorder = anyRejected ? '#fca5a5' : anySubmitted ? '#fde68a' : '#e2e8f0'
+              const groupBg     = anyRejected ? '#fff5f5' : 'white'
               const storeNamesInGroup = g.stores ? g.stores.split(', ').map((n: string) => n.trim()) : []
               const citiesFromStores = [...new Set(storeNamesInGroup.map((name: string) => { const s = storesList.find((x: any) => x.name === name); return s?.city && s?.state ? `${s.city}/${s.state}` : s?.city ?? null }).filter(Boolean))] as string[]
               const cityTitle = citiesFromStores.length > 0 ? citiesFromStores.join(', ') : g.city ? `${g.city}${g.state ? `/${g.state}` : ''}` : null
               return (
-                <div key={g.key} style={{ border: `2px solid ${allSubmitted ? '#fde68a' : '#e2e8f0'}`, borderRadius: '14px', overflow: 'hidden', background: 'white' }}>
+                <div key={g.key} style={{ border: `2px solid ${groupBorder}`, borderRadius: '14px', overflow: 'hidden', background: groupBg }}>
                   {/* ── Cabeçalho: cidade + período ── */}
                   <div style={{ padding: '16px', cursor: 'pointer' }} onClick={() => setExpandedGroup(isOpen ? null : g.key)}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -1461,7 +1478,8 @@ function AbaViagens() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '17px' }}>📍</span>
                           <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{cityTitle || 'Viagem'}</span>
-                          {allSubmitted && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>Enviada</span>}
+                          {anyRejected  && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fee2e2', color: '#dc2626' }}>Rejeitada</span>}
+                          {!anyRejected && anySubmitted && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>Enviada</span>}
                         </div>
                         <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📅 {formatDate(g.startDate)} → {formatDate(g.endDate)}{g.reason && <span> · {g.reason}</span>}</div>
                         {g.stores && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{g.stores}</div>}
@@ -1481,13 +1499,19 @@ function AbaViagens() {
                         const spent = Number(t.spentAmount ?? 0)
                         const released = Number(t.releasedAmount ?? 0)
                         const isOver = spent > released && released > 0
+                        const tRejected = t.status === 'OPEN' && t.rejectedAt
+                        const rowBorder = t.status === 'SUBMITTED' ? '#fde68a' : tRejected ? '#fca5a5' : '#e2e8f0'
+                        const rowBg     = t.status === 'SUBMITTED' ? '#fffdf0' : tRejected ? '#fef2f2' : 'white'
+                        const badgeBg   = t.status === 'SUBMITTED' ? '#fef3c7' : tRejected ? '#fee2e2' : '#dbeafe'
+                        const badgeColor = t.status === 'SUBMITTED' ? '#92400e' : tRejected ? '#dc2626' : '#1d4ed8'
+                        const badgeLabel = t.status === 'SUBMITTED' ? 'Enviada' : tRejected ? 'Rejeitada' : 'Aberta'
                         return (
-                          <div key={t.id} onClick={() => setPrestacaoTripId(t.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', background: 'white', borderRadius: '10px', padding: '12px 16px', border: `1.5px solid ${t.status === 'SUBMITTED' ? '#fde68a' : '#e2e8f0'}`, cursor: 'pointer', flexWrap: 'wrap' }}>
+                          <div key={t.id} onClick={() => setPrestacaoTripId(t.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', background: rowBg, borderRadius: '10px', padding: '12px 16px', border: `1.5px solid ${rowBorder}`, cursor: 'pointer', flexWrap: 'wrap' }}>
                             <div style={{ flex: 1, minWidth: '150px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>👤 {t.collaborator?.name ?? '—'}</span>
                                 {t.collaborator?.role && <span style={{ fontSize: '12px', color: '#64748b' }}>{t.collaborator.role}</span>}
-                                <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: t.status === 'OPEN' ? '#dbeafe' : t.status === 'SUBMITTED' ? '#fef3c7' : '#f1f5f9', color: t.status === 'OPEN' ? '#1d4ed8' : t.status === 'SUBMITTED' ? '#92400e' : '#64748b' }}>{STATUS_LABELS[t.status] ?? t.status}</span>
+                                <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: badgeBg, color: badgeColor }}>{badgeLabel}</span>
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>

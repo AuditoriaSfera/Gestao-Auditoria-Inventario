@@ -19,6 +19,8 @@ export const auditTripsRouter = createTRPCRouter({
       search: z.string().optional(),
       startDateFrom: z.date().optional(),
       startDateTo: z.date().optional(),
+      rejectedOnly: z.boolean().optional(),
+      excludeRejected: z.boolean().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const { skip, take } = paginate(input.page, input.pageSize)
@@ -40,6 +42,8 @@ export const auditTripsRouter = createTRPCRouter({
           ...(input.startDateFrom && { gte: input.startDateFrom }),
           ...(input.startDateTo   && { lte: input.startDateTo }),
         }} : {}),
+        ...(input.rejectedOnly    ? { rejectedAt: { not: null } } : {}),
+        ...(input.excludeRejected ? { rejectedAt: null }          : {}),
       }
       const [trips, total] = await Promise.all([
         ctx.db.auditTrip.findMany({

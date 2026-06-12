@@ -1097,11 +1097,11 @@ function AbaViagens() {
                       <div style={{ flex: 1, minWidth: '160px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '17px' }}>📍</span>
-                          <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{g.city || g.stores || 'Viagem'}</span>
+                          <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{g.stores || g.city || 'Viagem'}</span>
                           {allSubmitted && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>Enviada</span>}
                         </div>
                         <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📅 {formatDate(g.startDate)} → {formatDate(g.endDate)}{g.reason && <span> · {g.reason}</span>}</div>
-                        {g.stores && g.city && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{g.stores}</div>}
+                        {g.city && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>📍 {g.city}</div>}
                       </div>
                       <div style={{ textAlign: 'right', minWidth: '130px' }}>
                         <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{formatCurrency(totalSpent)}</div>

@@ -10,6 +10,7 @@ export const auditTripsRouter = createTRPCRouter({
       collaboratorId: z.string().optional(),
       collaboratorIds: z.array(z.string()).optional(),
       status: z.string().optional(),
+      statusIn: z.array(z.string()).optional(),
       search: z.string().optional(),
       startDateFrom: z.date().optional(),
       startDateTo: z.date().optional(),
@@ -24,7 +25,7 @@ export const auditTripsRouter = createTRPCRouter({
       const where: any = {
         deletedAt: null,
         ...collabFilter,
-        ...(input.status && { status: input.status }),
+        ...(input.statusIn?.length ? { status: { in: input.statusIn } } : input.status ? { status: input.status } : {}),
         ...(input.search && { OR: [
           { stores: { contains: input.search, mode: 'insensitive' } },
           { reason: { contains: input.search, mode: 'insensitive' } },

@@ -1134,7 +1134,8 @@ function AbaViagens() {
 
   const utils = trpc.useUtils()
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
-    page, pageSize: 15,
+    page, pageSize: 50,
+    statusIn: ['OPEN', 'SUBMITTED'],
     collaboratorIds: filterCollabs.length ? filterCollabs : undefined,
     search: filterSearch || undefined,
     startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
@@ -1156,7 +1157,7 @@ function AbaViagens() {
 
   function setE(k: string, v: string) { setExpForm(f => ({ ...f, [k]: v })) }
 
-  const trips = (data?.trips ?? []).filter((t: any) => t.status !== 'CLOSED')
+  const trips = data?.trips ?? []
 
   // Agrupa viagens por cidade + período (a mesma viagem gera 1 registro por colaborador)
   const groups: any[] = Object.values(
@@ -1291,7 +1292,7 @@ function AbaViagens() {
         <Btn onClick={() => setShowNew(true)}>+ Nova Viagem</Btn>
       </div>
 
-      <DataCard title={`Viagens (${data?.meta?.total ?? 0})`}>
+      <DataCard title={`Viagens (${groups.length})`}>
         {isLoading ? <LoadingState /> : !trips.length ? (
           <EmptyState icon="✈️" title="Nenhuma viagem" description='Clique em "+ Nova Viagem" para cadastrar.' />
         ) : (
@@ -1425,7 +1426,7 @@ function AbaConcluidas() {
         )}
       </div>
 
-      <DataCard title={`Viagens Concluídas (${data?.meta?.total ?? 0})`}>
+      <DataCard title={`Viagens Concluídas (${trips.length})`}>
         {isLoading ? <LoadingState /> : !trips.length ? (
           <EmptyState icon="✅" title="Nenhuma viagem concluída" description="As viagens validadas pelo financeiro aparecem aqui." />
         ) : (

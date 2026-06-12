@@ -317,15 +317,14 @@ function NovaTripModal({ onClose, collabsList, storesList, costTypes }: {
     setSaving(true)
     try {
       const storeNames = selectedStores.map(s => s.name).join(', ')
-      const city = firstStore?.city ?? ''
-      const state = firstStore?.state ?? ''
+      const cityDisplay = cidadesInfo || (firstStore?.city ? `${firstStore.city}${firstStore.state ? `/${firstStore.state}` : ''}` : '')
       for (const entry of collabEntries) {
         const totalAllowance = dates.reduce((sum, d) => sum + tipos.reduce((s, t) => s + parseMoney(entry.rows[d]?.values?.[t] ?? ''), 0), 0)
         const trip = await createTripMut.mutateAsync({
           collaboratorId: entry.collaboratorId,
           stores: storeNames,
-          city: city || undefined,
-          state: state || undefined,
+          city: cityDisplay || undefined,
+          state: undefined,
           reason: reason || undefined,
           startDate: new Date(startDate + 'T12:00:00'),
           endDate: new Date(endDate + 'T12:00:00'),
@@ -1098,7 +1097,7 @@ function AbaViagens() {
                       <div style={{ flex: 1, minWidth: '160px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '17px' }}>📍</span>
-                          <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{g.city ? `${g.city}${g.state ? `/${g.state}` : ''}` : (g.stores || 'Viagem')}</span>
+                          <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{g.city || g.stores || 'Viagem'}</span>
                           {allSubmitted && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>Enviada</span>}
                         </div>
                         <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📅 {formatDate(g.startDate)} → {formatDate(g.endDate)}{g.reason && <span> · {g.reason}</span>}</div>

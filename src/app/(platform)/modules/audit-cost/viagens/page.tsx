@@ -599,7 +599,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 
   const utils = trpc.useUtils()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const pendingSaveRef = useRef<{ date: string; idx: number } | null>(null)
+  const pendingSaveRef = useRef<{ key: string; idx: number } | null>(null)
   const [attachingId, setAttachingId] = useState<string | null>(null)
 
   const [attachments, setAttachments] = useState<Record<string, string>>(() => {
@@ -618,8 +618,8 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const createMut = trpc.auditCost.createExpense.useMutation({
     onSuccess: () => {
       if (pendingSaveRef.current) {
-        const { date: dk, idx } = pendingSaveRef.current
-        setNewRows(r => { const cp = [...(r[dk] ?? [])]; cp.splice(idx, 1); return { ...r, [dk]: cp } })
+        const { key, idx } = pendingSaveRef.current
+        setNewRows(r => { const cp = [...(r[key] ?? [])]; cp.splice(idx, 1); return { ...r, [key]: cp } })
         pendingSaveRef.current = null
       }
       setSavingNew(null)
@@ -635,18 +635,19 @@ function TabelaVerificacao({ trip }: { trip: any }) {
     setSavingAttach(id)
     setAttachMut.mutate({ id, attachmentUrl: (url ?? attachments[id]) || undefined })
   }
-  function saveNewRow(date: string, idx: number) {
-    const row = (newRows[date] ?? [])[idx]
+  function saveNewRow(date: string, type: string, idx: number) {
+    const key = `${date}|${type}`
+    const row = (newRows[key] ?? [])[idx]
     if (!row || !parseMoney(row.value)) return
-    pendingSaveRef.current = { date, idx }
-    setSavingNew(`${date}-${idx}`)
-    const ref = (byDateOrig[date] ?? [])[0]
+    pendingSaveRef.current = { key, idx }
+    setSavingNew(`${key}-${idx}`)
+    const ref = (byDateOrig[date] ?? []).find((e: any) => e.type === type) ?? (byDateOrig[date] ?? [])[0]
     createMut.mutate({
       auditorId: trip.auditorId,
       tripId: trip.id,
       collaboratorId: trip.collaboratorId ?? undefined,
       subtype: 'gasto',
-      type: ref?.type ?? DEFAULT_COST_TYPES[0],
+      type,
       storeName: ref?.storeName ?? trip.stores ?? undefined,
       paymentMethod: 'Gasto',
       date: new Date(date + 'T12:00:00'),
@@ -705,119 +706,136 @@ function TabelaVerificacao({ trip }: { trip: any }) {
           {datas.length === 0 && (
             <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Nenhuma solicitação registrada nesta viagem.</td></tr>
           )}
-          {datas.map(d => {
+          {datas.flatMap(d => {
             const dayOrig   = byDateOrig[d] ?? []
             const dayGastos = byDateGasto[d] ?? []
-            const pending   = newRows[d] ?? []
             const totalAdt  = dayOrig.reduce((s: number, e: any) => s + Number(e.value), 0)
             const totalGst  = dayGastos.reduce((s: number, e: any) => s + Number(e.value), 0)
             const saldo     = totalAdt - totalGst
             const data      = new Date(d + 'T12:00:00')
             const saldoColor = saldo > 0.01 ? '#15803d' : saldo < -0.01 ? '#dc2626' : '#64748b'
             const saldoBg   = saldo > 0.01 ? '#f0fdf4' : saldo < -0.01 ? '#fef2f2' : '#f8fafc'
+            const gastosByType: Record<string, any[]> = {}
+            for (const e of dayGastos) { if (!gastosByType[e.type]) gastosByType[e.type] = []; gastosByType[e.type].push(e) }
+            const rows = dayOrig.length > 0 ? dayOrig : [null]
+            const rowCount = rows.length
 
-            return (
-              <tr key={d} style={{ borderBottom: '2px solid #e2e8f0', verticalAlign: 'top' }}>
+            return rows.map((orig: any, i: number) => {
+              const type = orig?.type ?? ''
+              const rowKey = `${d}|${type}`
+              const typeGastos = orig ? (gastosByType[type] ?? []) : dayGastos
+              const pending = newRows[rowKey] ?? []
+              const isFirst = i === 0
 
-                {/* ── Data ── */}
-                <td style={{ padding: '12px 10px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                  <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
-                  <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
-                </td>
+              return (
+                <tr key={`${d}-${i}`} style={{ borderBottom: i === rowCount - 1 ? '2px solid #e2e8f0' : '1px solid #f1f5f9', verticalAlign: 'top' }}>
 
-                {/* ── Solicitação original (locked, read-only) ── */}
-                <td style={{ padding: '10px 10px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                  {dayOrig.map((e: any) => (
-                    <div key={e.id} style={{ marginBottom: '4px', padding: '5px 8px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '10px', fontWeight: '600', color: '#475569' }}>{e.type}</div>
-                      {e.storeName && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{e.storeName}</div>}
-                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginTop: '3px' }}>{formatCurrency(Number(e.value))}</div>
-                    </div>
-                  ))}
-                  {dayOrig.length === 0 && <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>}
-                </td>
+                  {/* ── Data ── */}
+                  {isFirst && (
+                    <td rowSpan={rowCount} style={{ padding: '12px 10px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                      <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
+                    </td>
+                  )}
 
-                {/* ── Lançamentos de gasto ── */}
-                <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0' }}>
-                  {/* Gastos salvos (valor imutável, só excluir) */}
-                  {dayGastos.map((e: any) => {
-                    // Fallback para attachmentUrl do banco caso o estado local não tenha sido inicializado
-                    const attachUrl = attachments[e.id] || e.attachmentUrl || ''
-                    const hasAttach = !!attachUrl
-                    const isImg = hasAttach && attachUrl.startsWith('data:image')
-                    return (
-                      <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-                        <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
-                          R$ {Number(e.value).toFixed(2).replace('.', ',')}
-                        </span>
-                        <button onClick={() => { setAttachingId(e.id); fileInputRef.current?.click() }}
-                          style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#e2e8f0'}`, background: hasAttach ? '#22c55e' : '#f8fafc', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
-                        </button>
-                        {isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer">
-                          <img src={attachUrl} alt="comp" style={{ height: '22px', width: '33px', borderRadius: '3px', border: '1px solid #e2e8f0', objectFit: 'cover' }} />
-                        </a>}
-                        {hasAttach && !isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#2563eb' }}>Ver ↗</a>}
-                        <button onClick={() => deleteExpMut.mutate({ id: e.id })}
-                          title="Excluir lançamento"
-                          style={{ padding: '2px 6px', borderRadius: '5px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
+                  {/* ── Solicitação (centro de custo) ── */}
+                  <td style={{ padding: '10px 10px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                    {orig ? (
+                      <div style={{ padding: '5px 8px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '10px', fontWeight: '600', color: '#475569' }}>{orig.type}</div>
+                        {orig.storeName && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{orig.storeName}</div>}
+                        <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginTop: '3px' }}>{formatCurrency(Number(orig.value))}</div>
                       </div>
-                    )
-                  })}
+                    ) : (
+                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>
+                    )}
+                  </td>
 
-                  {/* Pendentes (novos ainda não salvos) */}
-                  {pending.map((row, idx) => {
-                    const key = `${d}-${idx}`
-                    const ok = parseMoney(row.value) > 0
-                    return (
-                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '6px 10px', background: '#fffbeb', borderRadius: '7px', marginTop: '5px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>R$</span>
-                          <input autoFocus
-                            style={{ ...inpSm, width: '82px', textAlign: 'right', fontWeight: '700', padding: '4px 8px' }}
-                            placeholder="0,00" value={row.value}
-                            onChange={ev => setNewRows(r => { const cp = [...(r[d] ?? [])]; cp[idx] = { value: ev.target.value }; return { ...r, [d]: cp } })}
-                            onKeyDown={ev => { if (ev.key === 'Enter' && ok) saveNewRow(d, idx) }}
-                            inputMode="decimal" />
+                  {/* ── Lançamentos deste centro de custo ── */}
+                  <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0' }}>
+                    {typeGastos.map((e: any) => {
+                      const attachUrl = attachments[e.id] || e.attachmentUrl || ''
+                      const hasAttach = !!attachUrl
+                      const isImg = hasAttach && attachUrl.startsWith('data:image')
+                      return (
+                        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
+                            R$ {Number(e.value).toFixed(2).replace('.', ',')}
+                          </span>
+                          <button onClick={() => { setAttachingId(e.id); fileInputRef.current?.click() }}
+                            style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#e2e8f0'}`, background: hasAttach ? '#22c55e' : '#f8fafc', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
+                          </button>
+                          {isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={attachUrl} alt="comp" style={{ height: '22px', width: '33px', borderRadius: '3px', border: '1px solid #e2e8f0', objectFit: 'cover' }} />
+                          </a>}
+                          {hasAttach && !isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#2563eb' }}>Ver ↗</a>}
+                          <button onClick={() => deleteExpMut.mutate({ id: e.id })}
+                            title="Excluir lançamento"
+                            style={{ padding: '2px 6px', borderRadius: '5px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
                         </div>
-                        <button onClick={() => saveNewRow(d, idx)} disabled={savingNew === key || !ok}
-                          style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', background: ok ? '#2563eb' : '#cbd5e1', color: 'white', cursor: ok ? 'pointer' : 'not-allowed', fontSize: '11px', fontWeight: '600', flexShrink: 0 }}>
-                          {savingNew === key ? '…' : 'Salvar'}
-                        </button>
-                        <button onClick={() => setNewRows(r => { const cp = [...(r[d] ?? [])]; cp.splice(idx, 1); return { ...r, [d]: cp } })}
-                          style={{ padding: '3px 7px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '12px', flexShrink: 0 }}>✕</button>
+                      )
+                    })}
+
+                    {pending.map((row, idx) => {
+                      const pk = `${rowKey}-${idx}`
+                      const ok = parseMoney(row.value) > 0
+                      return (
+                        <div key={pk} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '6px 10px', background: '#fffbeb', borderRadius: '7px', marginTop: '5px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>R$</span>
+                            <input autoFocus
+                              style={{ ...inpSm, width: '82px', textAlign: 'right', fontWeight: '700', padding: '4px 8px' }}
+                              placeholder="0,00" value={row.value}
+                              onChange={ev => setNewRows(r => { const cp = [...(r[rowKey] ?? [])]; cp[idx] = { value: ev.target.value }; return { ...r, [rowKey]: cp } })}
+                              onKeyDown={ev => { if (ev.key === 'Enter' && ok) saveNewRow(d, type, idx) }}
+                              inputMode="decimal" />
+                          </div>
+                          <button onClick={() => saveNewRow(d, type, idx)} disabled={savingNew === pk || !ok}
+                            style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', background: ok ? '#2563eb' : '#cbd5e1', color: 'white', cursor: ok ? 'pointer' : 'not-allowed', fontSize: '11px', fontWeight: '600', flexShrink: 0 }}>
+                            {savingNew === pk ? '…' : 'Salvar'}
+                          </button>
+                          <button onClick={() => setNewRows(r => { const cp = [...(r[rowKey] ?? [])]; cp.splice(idx, 1); return { ...r, [rowKey]: cp } })}
+                            style={{ padding: '3px 7px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '12px', flexShrink: 0 }}>✕</button>
+                        </div>
+                      )
+                    })}
+
+                    <button onClick={() => setNewRows(r => ({ ...r, [rowKey]: [...(r[rowKey] ?? []), { value: '' }] }))}
+                      style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600', padding: '6px 0 2px', marginTop: '4px', display: 'block' }}>
+                      + Adicionar lançamento
+                    </button>
+                  </td>
+
+                  {/* ── Adiantado ── */}
+                  {isFirst && (
+                    <td rowSpan={rowCount} style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                      <span style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(totalAdt)}</span>
+                    </td>
+                  )}
+
+                  {/* ── Total Gasto ── */}
+                  {isFirst && (
+                    <td rowSpan={rowCount} style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                      <span style={{ fontWeight: '700', fontSize: '13px', color: totalGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(totalGst)}</span>
+                      {dayGastos.length > 0 && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{dayGastos.length} item{dayGastos.length !== 1 ? 's' : ''}</div>}
+                    </td>
+                  )}
+
+                  {/* ── Saldo ── */}
+                  {isFirst && (
+                    <td rowSpan={rowCount} style={{ padding: '12px 10px', textAlign: 'right', background: saldoBg, verticalAlign: 'top' }}>
+                      <span style={{ fontWeight: '800', fontSize: '13px', color: saldoColor }}>
+                        {saldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(saldo))}
+                      </span>
+                      <div style={{ fontSize: '9px', color: saldoColor, marginTop: '2px', fontWeight: '600', opacity: 0.85 }}>
+                        {saldo > 0.01 ? 'disponível' : saldo < -0.01 ? 'a receber' : '✓ ok'}
                       </div>
-                    )
-                  })}
-
-                  <button onClick={() => setNewRows(r => ({ ...r, [d]: [...(r[d] ?? []), { value: '' }] }))}
-                    style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600', padding: '6px 0 2px', marginTop: '4px', display: 'block' }}>
-                    + Adicionar lançamento
-                  </button>
-                </td>
-
-                {/* ── Adiantado ── */}
-                <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(totalAdt)}</span>
-                </td>
-
-                {/* ── Total Gasto ── */}
-                <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: '700', fontSize: '13px', color: totalGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(totalGst)}</span>
-                  {dayGastos.length > 0 && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{dayGastos.length} item{dayGastos.length !== 1 ? 's' : ''}</div>}
-                </td>
-
-                {/* ── Saldo ── */}
-                <td style={{ padding: '12px 10px', textAlign: 'right', background: saldoBg, verticalAlign: 'top' }}>
-                  <span style={{ fontWeight: '800', fontSize: '13px', color: saldoColor }}>
-                    {saldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(saldo))}
-                  </span>
-                  <div style={{ fontSize: '9px', color: saldoColor, marginTop: '2px', fontWeight: '600', opacity: 0.85 }}>
-                    {saldo > 0.01 ? 'disponível' : saldo < -0.01 ? 'a receber' : '✓ ok'}
-                  </div>
-                </td>
-              </tr>
-            )
+                    </td>
+                  )}
+                </tr>
+              )
+            })
           })}
         </tbody>
         <tfoot>

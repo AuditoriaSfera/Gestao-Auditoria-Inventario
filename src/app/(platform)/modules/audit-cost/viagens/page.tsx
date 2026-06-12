@@ -311,8 +311,9 @@ function syncRows(prev: Record<string, DayRow>, newDates: string[]): Record<stri
   return result
 }
 
-function NovaTripModal({ onClose, collabsList, storesList, costTypes }: {
+function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes }: {
   onClose: () => void
+  onCreated?: () => void
   collabsList: any[]
   storesList: any[]
   costTypes: any[]
@@ -408,7 +409,7 @@ function NovaTripModal({ onClose, collabsList, storesList, costTypes }: {
         }
       }
       utils.auditTrips.list.invalidate()
-      onClose()
+      onCreated ? onCreated() : onClose()
     } catch (e: any) {
       setError(e?.message ?? 'Erro ao salvar.')
     } finally {
@@ -1262,15 +1263,136 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   )
 }
 
-// ─── Aba: Viagens ─────────────────────────────────────────────────────────────
-function AbaViagens() {
+// ─── Aba: Viagens (cadastro) ──────────────────────────────────────────────────
+function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
+  const [showNew, setShowNew] = useState(false)
+  const [filterSearch, setFilterSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [deleteTripId, setDeleteTripId] = useState<string | null>(null)
+
+  const utils = trpc.useUtils()
+  const { data, isLoading } = trpc.auditTrips.list.useQuery({
+    page, pageSize: 50,
+    search: filterSearch || undefined,
+  })
+  const { data: collabs } = trpc.auditCollaborators.list.useQuery()
+  const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
+  const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
+  const storesList = storesData?.stores ?? []
+
+  const deleteTripMut = trpc.auditTrips.delete.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setDeleteTripId(null) } })
+
+  const trips = data?.trips ?? []
+
+  const thSt: React.CSSProperties = { padding: '9px 14px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', whiteSpace: 'nowrap' }
+  const tdSt: React.CSSProperties = { padding: '11px 14px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle', fontSize: '13px' }
+
+  return (
+    <>
+      {showNew && (
+        <NovaTripModal
+          onClose={() => setShowNew(false)}
+          onCreated={() => { setShowNew(false); onGoEmAndamento() }}
+          collabsList={collabs ?? []}
+          storesList={storesList}
+          costTypes={costTypes ?? []}
+        />
+      )}
+      {deleteTripId && (
+        <Modal title="Confirmar Exclusão" onClose={() => setDeleteTripId(null)}>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta viagem e todas as despesas?</div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Btn variant="outline" onClick={() => setDeleteTripId(null)}>Cancelar</Btn>
+            <Btn variant="danger" onClick={() => deleteTripMut.mutate({ id: deleteTripId })} disabled={deleteTripMut.isPending}>Excluir</Btn>
+          </div>
+        </Modal>
+      )}
+
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <input
+          placeholder="Pesquisar colaborador, viagem, loja..."
+          value={filterSearch}
+          onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
+          style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '13px', minWidth: '280px', flex: 1 }}
+        />
+        <Btn onClick={() => setShowNew(true)}>+ Nova Viagem</Btn>
+      </div>
+
+      <DataCard title={`Viagens (${trips.length})`}>
+        {isLoading ? <LoadingState /> : !trips.length ? (
+          <EmptyState icon="✈️" title="Nenhuma viagem cadastrada" description='Clique em "+ Nova Viagem" para criar a primeira viagem.' />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={thSt}>Colaborador</th>
+                  <th style={thSt}>Destino / Lojas</th>
+                  <th style={thSt}>Período</th>
+                  <th style={thSt}>Status</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {trips.map((t: any) => {
+                  const isRejected = t.status === 'OPEN' && t.rejectedAt
+                  const badgeBg    = t.status === 'SUBMITTED' ? '#fef3c7' : isRejected ? '#fee2e2' : t.status === 'CLOSED' ? '#dcfce7' : '#dbeafe'
+                  const badgeColor = t.status === 'SUBMITTED' ? '#92400e'  : isRejected ? '#dc2626' : t.status === 'CLOSED' ? '#166534' : '#1d4ed8'
+                  const badgeLabel = t.status === 'SUBMITTED' ? 'Enviada'  : isRejected ? 'Rejeitada' : t.status === 'CLOSED' ? 'Concluída' : 'Aberta'
+                  return (
+                    <tr key={t.id} style={{ background: 'white' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'white'}>
+                      <td style={tdSt}>
+                        <div style={{ fontWeight: '600', color: '#0f172a' }}>{t.collaborator?.name ?? '—'}</div>
+                        {t.collaborator?.role && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.collaborator.role}</div>}
+                      </td>
+                      <td style={tdSt}>
+                        <div style={{ fontWeight: '500', color: '#0f172a' }}>{t.city}{t.state ? `/${t.state}` : ''}</div>
+                        {t.stores && <div style={{ fontSize: '11px', color: '#94a3b8', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.stores}</div>}
+                      </td>
+                      <td style={tdSt}>
+                        <div style={{ color: '#374151' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
+                        {t.reason && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.reason}</div>}
+                      </td>
+                      <td style={tdSt}>
+                        <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: badgeBg, color: badgeColor }}>{badgeLabel}</span>
+                      </td>
+                      <td style={{ ...tdSt, textAlign: 'right' }}>
+                        <button onClick={() => setDeleteTripId(t.id)}
+                          style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px' }}>
+                          Excluir
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(data?.meta?.totalPages ?? 0) > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>Página {data!.meta.page} de {data!.meta.totalPages}</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Btn variant="outline" small disabled={!data!.meta.hasPrev} onClick={() => setPage(p => p - 1)}>← Anterior</Btn>
+              <Btn variant="outline" small disabled={!data!.meta.hasNext} onClick={() => setPage(p => p + 1)}>Próxima →</Btn>
+            </div>
+          </div>
+        )}
+      </DataCard>
+    </>
+  )
+}
+
+// ─── Aba: Em Andamento ───────────────────────────────────────────────────────
+function AbaEmAndamento() {
   const [page, setPage] = useState(1)
   const [filterCollabs, setFilterCollabs] = useState<string[]>([])
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'OPEN' | 'SUBMITTED' | 'REJECTED'>('')
-  const [showNew, setShowNew] = useState(false)
   const [editTripId, setEditTripId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ reason: '', observations: '', status: 'OPEN' })
   const [showExpense, setShowExpense] = useState(false)
@@ -1323,16 +1445,6 @@ function AbaViagens() {
 
   return (
     <>
-      {/* Modal Nova Viagem (novo fluxo) */}
-      {showNew && (
-        <NovaTripModal
-          onClose={() => setShowNew(false)}
-          collabsList={collabs ?? []}
-          storesList={storesList}
-          costTypes={costTypes ?? []}
-        />
-      )}
-
       {/* Modal Editar Viagem (simplificado) */}
       {editTripId && (
         <Modal title="Editar Viagem" onClose={() => { setEditTripId(null); setError('') }}>
@@ -1451,7 +1563,6 @@ function AbaViagens() {
             </button>
           )}
         </div>
-        <Btn onClick={() => setShowNew(true)}>+ Nova Viagem</Btn>
       </div>
 
       <DataCard title={`Viagens (${groups.length})`}>
@@ -1644,20 +1755,22 @@ function AbaConcluidas() {
 }
 
 // ─── Página raiz com abas ─────────────────────────────────────────────────────
-type Tab = 'viagens' | 'concluidas' | 'colaboradores' | 'tipos'
+type Tab = 'viagens' | 'emandamento' | 'concluidas' | 'colaboradores' | 'tipos'
 
 export default function ViagensPage() {
   const [tab, setTab] = useState<Tab>('viagens')
   const tabStyle = (active: boolean): React.CSSProperties => ({ padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: active ? '700' : '500', background: active ? '#0f172a' : 'transparent', color: active ? 'white' : '#64748b', transition: 'all 0.15s' })
   return (
     <ModulePage title="Custo de Auditoria — Viagens" description="Gerencie colaboradores, tipos de custo e cadastre viagens com prestação de contas">
-      <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '14px', width: 'fit-content' }}>
+      <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '14px', width: 'fit-content', flexWrap: 'wrap' }}>
         <button style={tabStyle(tab === 'viagens')} onClick={() => setTab('viagens')}>✈️ Viagens</button>
+        <button style={tabStyle(tab === 'emandamento')} onClick={() => setTab('emandamento')}>⏳ Em Andamento</button>
         <button style={tabStyle(tab === 'concluidas')} onClick={() => setTab('concluidas')}>✅ Concluídas</button>
         <button style={tabStyle(tab === 'colaboradores')} onClick={() => setTab('colaboradores')}>👥 Colaboradores</button>
         <button style={tabStyle(tab === 'tipos')} onClick={() => setTab('tipos')}>🏷️ Tipos de Custo</button>
       </div>
-      {tab === 'viagens' && <AbaViagens />}
+      {tab === 'viagens' && <AbaViagens onGoEmAndamento={() => setTab('emandamento')} />}
+      {tab === 'emandamento' && <AbaEmAndamento />}
       {tab === 'concluidas' && <AbaConcluidas />}
       {tab === 'colaboradores' && <AbaColaboradores />}
       {tab === 'tipos' && <AbaTiposCusto />}

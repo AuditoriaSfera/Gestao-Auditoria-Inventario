@@ -844,7 +844,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
           <tr style={{ background: '#e2e8f0' }}>
             <td colSpan={3} style={{ padding: '11px 12px', fontWeight: '700', fontSize: '12px', color: '#374151', borderTop: '2px solid #cbd5e1' }}>TOTAL GERAL</td>
             <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#6d28d9', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalOrigGeral)}</td>
-            <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '900', fontSize: '15px', color: '#0f172a', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalGastoGeral)}</td>
+            <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '900', fontSize: '15px', color: totalGastoGeral > 0 ? '#92400e' : '#94a3b8', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalGastoGeral)}</td>
             <td style={{ padding: '11px 10px', textAlign: 'right', borderTop: '2px solid #cbd5e1', background: (totalOrigGeral - totalGastoGeral) > 0.01 ? '#f0fdf4' : (totalOrigGeral - totalGastoGeral) < -0.01 ? '#fef2f2' : '#f8fafc' }}>
               {(() => { const s = totalOrigGeral - totalGastoGeral; const c = s > 0.01 ? '#15803d' : s < -0.01 ? '#dc2626' : '#64748b'; return (<><span style={{ fontWeight: '900', fontSize: '15px', color: c }}>{s > 0.01 ? '+' : ''}{formatCurrency(Math.abs(s))}</span><div style={{ fontSize: '9px', color: c, fontWeight: '600', marginTop: '2px' }}>{s > 0.01 ? 'disponível' : s < -0.01 ? 'a receber' : '✓ ok'}</div></>) })()}
             </td>

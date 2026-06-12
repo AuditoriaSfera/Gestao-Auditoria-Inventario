@@ -681,7 +681,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
     if (!byDateGasto[d]) byDateGasto[d] = []
     byDateGasto[d].push(e)
   }
-  for (const d of Object.keys(newRows)) { if (!byDateOrig[d]) byDateOrig[d] = [] }
+  for (const k of Object.keys(newRows)) { const d = k.split('|')[0]; if (d && !byDateOrig[d]) byDateOrig[d] = [] }
   const datas = [...new Set([...Object.keys(byDateOrig), ...Object.keys(byDateGasto)])].sort()
   const totalGastoGeral = gastoExp.reduce((s: number, e: any) => s + Number(e.value), 0)
   const totalOrigGeral  = originalExp.reduce((s: number, e: any) => s + Number(e.value), 0)

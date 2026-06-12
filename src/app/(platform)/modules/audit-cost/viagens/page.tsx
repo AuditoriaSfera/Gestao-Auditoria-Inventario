@@ -765,7 +765,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                             R$ {Number(e.value).toFixed(2).replace('.', ',')}
                           </span>
                           <button onClick={() => { setAttachingId(e.id); fileInputRef.current?.click() }}
-                            style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#e2e8f0'}`, background: hasAttach ? '#22c55e' : '#f8fafc', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#fecaca'}`, background: hasAttach ? '#22c55e' : '#fef2f2', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#dc2626', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
                           </button>
                           {isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer">

@@ -930,9 +930,14 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     )
   }
 
-  const history: { icon: string; label: string; user: string; date: string; color: string }[] = []
-  if (trip.submittedBy) history.push({ icon: '📤', label: 'Enviado', user: trip.submittedBy, date: trip.submittedAt ? new Date(trip.submittedAt).toLocaleString('pt-BR') : '—', color: '#92400e' })
-  if (trip.validatedBy)  history.push({ icon: '✅', label: 'Validado', user: trip.validatedBy,  date: trip.validatedAt  ? new Date(trip.validatedAt).toLocaleString('pt-BR')  : '—', color: '#166534' })
+  // History sempre mostra entradas com base no status, mesmo sem dados de usuário/data
+  const history: { icon: string; label: string; user: string | null; date: string | null; color: string }[] = []
+  if (isSubmitted || isClosed) {
+    history.push({ icon: '📤', label: 'Prestação enviada', user: trip.submittedBy ?? null, date: trip.submittedAt ? new Date(trip.submittedAt).toLocaleString('pt-BR') : null, color: '#92400e' })
+  }
+  if (isClosed) {
+    history.push({ icon: '✅', label: 'Prestação validada', user: trip.validatedBy ?? null, date: trip.validatedAt ? new Date(trip.validatedAt).toLocaleString('pt-BR') : null, color: '#166534' })
+  }
 
   return (
     <Modal title={`Prestação de Contas — ${trip.collaborator?.name ?? ''}`} onClose={onClose} wide>
@@ -977,8 +982,12 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'white', borderRadius: '10px', border: '1.5px solid #e2e8f0', textAlign: 'left' }}>
                 <span style={{ fontSize: '18px' }}>{h.icon}</span>
                 <div>
-                  <span style={{ fontSize: '13px', fontWeight: '700', color: h.color }}>{h.label} por <strong>{h.user}</strong></span>
-                  <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>em {h.date}</span>
+                  <span style={{ fontSize: '13px', fontWeight: '700', color: h.color }}>
+                    {h.label}{h.user ? <> por <strong>{h.user}</strong></> : ''}
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>
+                    {h.date ? `em ${h.date}` : '(data não disponível)'}
+                  </span>
                 </div>
               </div>
             ))}

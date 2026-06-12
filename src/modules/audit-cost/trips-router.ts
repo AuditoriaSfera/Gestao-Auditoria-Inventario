@@ -90,11 +90,11 @@ export const auditTripsRouter = createTRPCRouter({
       const extra: any = {}
       if (data.status === 'SUBMITTED') {
         extra.submittedAt = new Date()
-        extra.submittedBy = ctx.session.user.name
+        extra.submittedBy = ctx.session.user.name ?? ctx.session.user.email ?? 'Colaborador'
       }
       if (data.status === 'CLOSED') {
         extra.validatedAt = new Date()
-        extra.validatedBy = ctx.session.user.name
+        extra.validatedBy = ctx.session.user.name ?? ctx.session.user.email ?? 'Financeiro'
       }
       return ctx.db.auditTrip.update({ where: { id }, data: { ...data, ...extra } })
     }),

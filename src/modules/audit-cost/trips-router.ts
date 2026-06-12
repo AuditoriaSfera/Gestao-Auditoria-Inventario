@@ -114,16 +114,27 @@ export const auditTripsRouter = createTRPCRouter({
       const extra: any = {}
       const userName = ctx.session.user.name ?? ctx.session.user.email ?? 'Usuário'
       if (data.status === 'SUBMITTED' || data.status === 'CLOSED') {
-        const current = await ctx.db.auditTrip.findUnique({ where: { id }, select: { timeline: true } })
+        const current = await ctx.db.auditTrip.findUnique({
+          where: { id },
+          select: { timeline: true, submittedAt: true, submittedBy: true, rejectedAt: true, rejectedBy: true, rejectionReason: true },
+        })
+        const existing: any[] = current?.timeline ? JSON.parse(current.timeline) : []
         if (data.status === 'SUBMITTED') {
           extra.submittedAt = new Date()
           extra.submittedBy = userName
           extra.timeline = appendEvent(current?.timeline, { type: 'submitted', user: userName })
         }
         if (data.status === 'CLOSED') {
+          // Backfill submitted/rejected events se não estiverem na timeline
+          if (current?.submittedAt && !existing.some((e: any) => e.type === 'submitted')) {
+            existing.unshift({ type: 'submitted', user: current.submittedBy, date: current.submittedAt.toISOString() })
+          }
+          if (current?.rejectedAt && !existing.some((e: any) => e.type === 'rejected')) {
+            existing.push({ type: 'rejected', user: current.rejectedBy, date: current.rejectedAt.toISOString(), comment: current.rejectionReason })
+          }
           extra.validatedAt = new Date()
           extra.validatedBy = userName
-          extra.timeline = appendEvent(current?.timeline, { type: 'validated', user: userName })
+          extra.timeline = appendEvent(JSON.stringify(existing), { type: 'validated', user: userName })
         }
       }
       return ctx.db.auditTrip.update({ where: { id }, data: { ...data, ...extra } })
@@ -133,8 +144,16 @@ export const auditTripsRouter = createTRPCRouter({
     .input(z.object({ id: z.string(), reason: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const userName = ctx.session.user.name ?? ctx.session.user.email ?? 'Financeiro'
-      const current = await ctx.db.auditTrip.findUnique({ where: { id: input.id }, select: { timeline: true } })
-      const timeline = appendEvent(current?.timeline, { type: 'rejected', user: userName, comment: input.reason })
+      const current = await ctx.db.auditTrip.findUnique({
+        where: { id: input.id },
+        select: { timeline: true, submittedAt: true, submittedBy: true },
+      })
+      // Backfill submitted event se ainda não estiver na timeline
+      const existing: any[] = current?.timeline ? JSON.parse(current.timeline) : []
+      if (current?.submittedAt && !existing.some((e: any) => e.type === 'submitted')) {
+        existing.unshift({ type: 'submitted', user: current.submittedBy, date: current.submittedAt.toISOString() })
+      }
+      const timeline = appendEvent(JSON.stringify(existing), { type: 'rejected', user: userName, comment: input.reason })
       return ctx.db.auditTrip.update({
         where: { id: input.id },
         data: { status: 'OPEN', rejectedAt: new Date(), rejectedBy: userName, rejectionReason: input.reason, timeline },

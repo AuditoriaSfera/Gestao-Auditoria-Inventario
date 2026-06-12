@@ -1001,18 +1001,29 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     )
   }
 
-  // Timeline acumulada — usa campo JSON se disponível, senão reconstrói dos campos legados
+  // Timeline acumulada — mescla JSON com campos individuais para garantir histórico completo
   type TLEvent = { type: string; user?: string; date?: string; comment?: string }
   const timeline: TLEvent[] = (() => {
-    if (trip.timeline) {
-      try { return JSON.parse(trip.timeline) } catch { return [] }
+    const jsonEvents: TLEvent[] = (() => {
+      try { return trip.timeline ? JSON.parse(trip.timeline) : [] } catch { return [] }
+    })()
+    const types = new Set(jsonEvents.map((e: TLEvent) => e.type))
+    const prefix: TLEvent[] = []
+    // Garante que submitted aparece antes dos outros eventos JSON
+    if (!types.has('submitted') && (trip.submittedBy || trip.submittedAt)) {
+      prefix.push({ type: 'submitted', user: trip.submittedBy ?? undefined, date: trip.submittedAt ?? undefined })
     }
-    // fallback para viagens antigas sem timeline
-    const evts: TLEvent[] = []
-    if (trip.submittedBy || trip.submittedAt) evts.push({ type: 'submitted', user: trip.submittedBy ?? undefined, date: trip.submittedAt ?? undefined })
-    if (trip.rejectedBy  || trip.rejectedAt)  evts.push({ type: 'rejected',  user: trip.rejectedBy  ?? undefined, date: trip.rejectedAt  ?? undefined, comment: trip.rejectionReason ?? undefined })
-    if (trip.validatedBy || trip.validatedAt) evts.push({ type: 'validated', user: trip.validatedBy ?? undefined, date: trip.validatedAt ?? undefined })
-    return evts
+    const merged = [...prefix, ...jsonEvents]
+    // Adiciona validated ao final se não estiver no JSON mas existir nos campos
+    if (!types.has('validated') && (trip.validatedBy || trip.validatedAt)) {
+      merged.push({ type: 'validated', user: trip.validatedBy ?? undefined, date: trip.validatedAt ?? undefined })
+    }
+    // Ordena por data
+    return merged.sort((a, b) => {
+      if (!a.date) return -1
+      if (!b.date) return 1
+      return new Date(a.date).getTime() - new Date(b.date).getTime()
+    })
   })()
 
   const tlConfig: Record<string, { icon: string; label: string; color: string; bg: string; border: string }> = {

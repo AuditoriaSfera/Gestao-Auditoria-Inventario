@@ -601,6 +601,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pendingSaveRef = useRef<{ key: string; idx: number } | null>(null)
   const [attachingId, setAttachingId] = useState<string | null>(null)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const [attachments, setAttachments] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {}
@@ -691,6 +692,15 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   return (
     <div style={{ overflowX: 'auto' }}>
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFileChange} />
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}
+        >
+          <img src={lightboxUrl} alt="comprovante" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
+          <button onClick={() => setLightboxUrl(null)} style={{ position: 'absolute', top: '20px', right: '24px', background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: '28px', cursor: 'pointer', borderRadius: '50%', width: '40px', height: '40px', lineHeight: '40px', textAlign: 'center' }}>✕</button>
+        </div>
+      )}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
@@ -768,9 +778,13 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                             style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#fecaca'}`, background: hasAttach ? '#22c55e' : '#fef2f2', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#dc2626', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
                           </button>
-                          {isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={attachUrl} alt="comp" style={{ height: '22px', width: '33px', borderRadius: '3px', border: '1px solid #e2e8f0', objectFit: 'cover' }} />
-                          </a>}
+                          {isImg && (
+                            <img
+                              src={attachUrl} alt="comp"
+                              onClick={() => setLightboxUrl(attachUrl)}
+                              style={{ height: '22px', width: '33px', borderRadius: '3px', border: '1px solid #e2e8f0', objectFit: 'cover', cursor: 'zoom-in' }}
+                            />
+                          )}
                           {hasAttach && !isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#2563eb' }}>Ver ↗</a>}
                           <button onClick={() => deleteExpMut.mutate({ id: e.id })}
                             title="Excluir lançamento"

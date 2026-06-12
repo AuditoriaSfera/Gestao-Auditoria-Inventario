@@ -809,32 +809,26 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                     </button>
                   </td>
 
-                  {/* ── Adiantado ── */}
-                  {isFirst && (
-                    <td rowSpan={rowCount} style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                      <span style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(totalAdt)}</span>
-                    </td>
-                  )}
-
-                  {/* ── Total Gasto ── */}
-                  {isFirst && (
-                    <td rowSpan={rowCount} style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                      <span style={{ fontWeight: '700', fontSize: '13px', color: totalGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(totalGst)}</span>
-                      {dayGastos.length > 0 && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{dayGastos.length} item{dayGastos.length !== 1 ? 's' : ''}</div>}
-                    </td>
-                  )}
-
-                  {/* ── Saldo ── */}
-                  {isFirst && (
-                    <td rowSpan={rowCount} style={{ padding: '12px 10px', textAlign: 'right', background: saldoBg, verticalAlign: 'top' }}>
-                      <span style={{ fontWeight: '800', fontSize: '13px', color: saldoColor }}>
-                        {saldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(saldo))}
-                      </span>
-                      <div style={{ fontSize: '9px', color: saldoColor, marginTop: '2px', fontWeight: '600', opacity: 0.85 }}>
-                        {saldo > 0.01 ? 'disponível' : saldo < -0.01 ? 'a receber' : '✓ ok'}
-                      </div>
-                    </td>
-                  )}
+                  {/* ── Adiantado (por centro de custo) ── */}
+                  {(() => {
+                    const rowAdt = Number(orig?.value ?? 0)
+                    const rowGst = totalTypeGasto
+                    const rowSaldo = rowAdt - rowGst
+                    const rowSaldoColor = rowSaldo > 0.01 ? '#15803d' : rowSaldo < -0.01 ? '#dc2626' : '#64748b'
+                    const rowSaldoBg = rowSaldo > 0.01 ? '#f0fdf4' : rowSaldo < -0.01 ? '#fef2f2' : '#f8fafc'
+                    return (<>
+                      <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(rowAdt)}</span>
+                      </td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: '700', fontSize: '13px', color: rowGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(rowGst)}</span>
+                      </td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right', background: rowSaldoBg, verticalAlign: 'top' }}>
+                        <span style={{ fontWeight: '800', fontSize: '13px', color: rowSaldoColor }}>{rowSaldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(rowSaldo))}</span>
+                        <div style={{ fontSize: '9px', color: rowSaldoColor, marginTop: '2px', fontWeight: '600', opacity: 0.85 }}>{rowSaldo > 0.01 ? 'disponível' : rowSaldo < -0.01 ? 'a receber' : '✓ ok'}</div>
+                      </td>
+                    </>)
+                  })()}
                 </tr>
               )
             })

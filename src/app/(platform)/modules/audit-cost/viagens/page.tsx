@@ -1129,7 +1129,6 @@ function AbaViagens() {
                                 {t.collaborator?.role && <span style={{ fontSize: '12px', color: '#64748b' }}>{t.collaborator.role}</span>}
                                 <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: t.status === 'OPEN' ? '#dbeafe' : t.status === 'SUBMITTED' ? '#fef3c7' : '#f1f5f9', color: t.status === 'OPEN' ? '#1d4ed8' : t.status === 'SUBMITTED' ? '#92400e' : '#64748b' }}>{STATUS_LABELS[t.status] ?? t.status}</span>
                               </div>
-                              <div style={{ fontSize: '12px', color: isOver ? '#dc2626' : '#64748b', marginTop: '3px' }}>{formatCurrency(spent)} gasto{released > 0 ? ` · ${formatCurrency(released)} liberado` : ''}</div>
                             </div>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={e => { e.stopPropagation(); setPrestacaoTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fde68a', background: '#fffbeb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#92400e' }}>📊 Prestação</button>

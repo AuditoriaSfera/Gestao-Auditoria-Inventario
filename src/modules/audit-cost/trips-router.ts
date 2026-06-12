@@ -116,18 +116,24 @@ export const auditTripsRouter = createTRPCRouter({
       if (data.status === 'SUBMITTED' || data.status === 'CLOSED') {
         const current = await ctx.db.auditTrip.findUnique({
           where: { id },
-          select: { timeline: true, submittedAt: true, submittedBy: true, rejectedAt: true, rejectedBy: true, rejectionReason: true },
+          select: { timeline: true, submittedAt: true, submittedBy: true, rejectedAt: true, rejectedBy: true, rejectionReason: true, returnedAmount: true, returnProofUrls: true },
         })
         const existing: any[] = current?.timeline ? JSON.parse(current.timeline) : []
         if (data.status === 'SUBMITTED') {
           extra.submittedAt = new Date()
           extra.submittedBy = userName
-          extra.timeline = appendEvent(current?.timeline, { type: 'submitted', user: userName })
+          const tlEvent: any = { type: 'submitted', user: userName }
+          if (current?.returnedAmount && Number(current.returnedAmount) > 0) tlEvent.returnedAmount = Number(current.returnedAmount)
+          if (current?.returnProofUrls) { try { tlEvent.returnProofUrls = JSON.parse(current.returnProofUrls) } catch {} }
+          extra.timeline = appendEvent(current?.timeline, tlEvent)
         }
         if (data.status === 'CLOSED') {
           // Backfill submitted/rejected events se não estiverem na timeline
           if (current?.submittedAt && !existing.some((e: any) => e.type === 'submitted')) {
-            existing.unshift({ type: 'submitted', user: current.submittedBy, date: current.submittedAt.toISOString() })
+            const bf: any = { type: 'submitted', user: current.submittedBy, date: current.submittedAt.toISOString() }
+            if (current?.returnedAmount && Number(current.returnedAmount) > 0) bf.returnedAmount = Number(current.returnedAmount)
+            if (current?.returnProofUrls) { try { bf.returnProofUrls = JSON.parse(current.returnProofUrls) } catch {} }
+            existing.unshift(bf)
           }
           if (current?.rejectedAt && !existing.some((e: any) => e.type === 'rejected')) {
             existing.push({ type: 'rejected', user: current.rejectedBy, date: current.rejectedAt.toISOString(), comment: current.rejectionReason })
@@ -146,12 +152,15 @@ export const auditTripsRouter = createTRPCRouter({
       const userName = ctx.session.user.name ?? ctx.session.user.email ?? 'Financeiro'
       const current = await ctx.db.auditTrip.findUnique({
         where: { id: input.id },
-        select: { timeline: true, submittedAt: true, submittedBy: true },
+        select: { timeline: true, submittedAt: true, submittedBy: true, returnedAmount: true, returnProofUrls: true },
       })
       // Backfill submitted event se ainda não estiver na timeline
       const existing: any[] = current?.timeline ? JSON.parse(current.timeline) : []
       if (current?.submittedAt && !existing.some((e: any) => e.type === 'submitted')) {
-        existing.unshift({ type: 'submitted', user: current.submittedBy, date: current.submittedAt.toISOString() })
+        const bf: any = { type: 'submitted', user: current.submittedBy, date: current.submittedAt.toISOString() }
+        if (current?.returnedAmount && Number(current.returnedAmount) > 0) bf.returnedAmount = Number(current.returnedAmount)
+        if (current?.returnProofUrls) { try { bf.returnProofUrls = JSON.parse(current.returnProofUrls) } catch {} }
+        existing.unshift(bf)
       }
       const timeline = appendEvent(JSON.stringify(existing), { type: 'rejected', user: userName, comment: input.reason })
       return ctx.db.auditTrip.update({
@@ -172,12 +181,15 @@ export const auditTripsRouter = createTRPCRouter({
       advancedAmount: z.number().min(0).optional(),
       returnedAmount: z.number().min(0).optional(),
       returnProofUrl: z.string().optional(),
+      returnProofUrls: z.array(z.string()).optional(),
       returnProofNote: z.string().optional(),
       returnedAt: z.date().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { id, ...data } = input
-      return ctx.db.auditTrip.update({ where: { id }, data })
+      const { id, returnProofUrls, ...data } = input
+      const extra: any = {}
+      if (returnProofUrls !== undefined) extra.returnProofUrls = JSON.stringify(returnProofUrls)
+      return ctx.db.auditTrip.update({ where: { id }, data: { ...data, ...extra } })
     }),
 
   // Retorna todos os períodos (ano+mês) que têm viagens OU despesas

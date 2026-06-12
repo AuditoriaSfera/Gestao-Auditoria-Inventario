@@ -928,7 +928,6 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const balance = advancedAmount - spentAmount
   const toReturn  = Math.max(0, balance)
   const toReceive = Math.max(0, -balance)
-  const balanced = Math.abs(balance) < 0.01
   const isClosed    = trip.status === 'CLOSED'
   const isSubmitted = trip.status === 'SUBMITTED'
   const isRejected  = !isClosed && !isSubmitted && !!trip.rejectedAt
@@ -936,11 +935,14 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const [saving, setSaving] = useState(false)
   const [enviarError, setEnviarError] = useState('')
   const [returnAmount, setReturnAmount] = useState('')
-  const [returnProofUrl, setReturnProofUrl] = useState(trip.returnProofUrl ?? '')
+  const [returnProofUrls, setReturnProofUrls] = useState<string[]>(() => {
+    try { return trip.returnProofUrls ? JSON.parse(trip.returnProofUrls) : [] } catch { return [] }
+  })
   const returnFileRef = useRef<HTMLInputElement>(null)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState('')
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const missingComprovante = gastoExpenses.filter((e: any) => !e.attachmentUrl)
   const canEnviar = missingComprovante.length === 0
@@ -954,21 +956,24 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const rejectMut = trpc.auditTrips.reject.useMutation({ onSuccess: invalidate, onError: () => setSaving(false) })
 
   function handleReturnFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = e => { setReturnProofUrl(e.target?.result as string) }
-    reader.readAsDataURL(file)
+    const files = Array.from(ev.target.files ?? [])
+    if (!files.length) return
+    for (const file of files) {
+      const reader = new FileReader()
+      reader.onload = e => { setReturnProofUrls(prev => [...prev, e.target?.result as string]) }
+      reader.readAsDataURL(file)
+    }
+    ev.target.value = ''
   }
 
   function handleEnviar() {
     if (!canEnviar) { setEnviarError(`${missingComprovante.length} lançamento(s) sem comprovante anexado.`); return }
     if (toReturn > 0) {
       const amt = parseFloat(returnAmount.replace(',', '.'))
-      if (isNaN(amt) || Math.abs(amt - toReturn) > 0.01) { setEnviarError(`O valor informado deve ser exatamente ${formatCurrency(toReturn)}.`); return }
-      if (!returnProofUrl) { setEnviarError('Anexe o comprovante de devolução antes de enviar.'); return }
+      if (isNaN(amt) || amt <= 0) { setEnviarError('Informe o valor devolvido (qualquer valor positivo).'); return }
+      if (!returnProofUrls.length) { setEnviarError('Anexe ao menos um comprovante de devolução antes de enviar.'); return }
       setEnviarError(''); setSaving(true)
-      updateSettlementMut.mutate({ id: trip.id, returnedAmount: toReturn, returnProofUrl, returnedAt: new Date() })
+      updateSettlementMut.mutate({ id: trip.id, returnedAmount: amt, returnProofUrls, returnedAt: new Date() })
       return
     }
     setEnviarError(''); setSaving(true)
@@ -1002,23 +1007,20 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   }
 
   // Timeline acumulada — mescla JSON com campos individuais para garantir histórico completo
-  type TLEvent = { type: string; user?: string; date?: string; comment?: string }
+  type TLEvent = { type: string; user?: string; date?: string; comment?: string; returnedAmount?: number; returnProofUrls?: string[] }
   const timeline: TLEvent[] = (() => {
     const jsonEvents: TLEvent[] = (() => {
       try { return trip.timeline ? JSON.parse(trip.timeline) : [] } catch { return [] }
     })()
     const types = new Set(jsonEvents.map((e: TLEvent) => e.type))
     const prefix: TLEvent[] = []
-    // Garante que submitted aparece antes dos outros eventos JSON
     if (!types.has('submitted') && (trip.submittedBy || trip.submittedAt)) {
       prefix.push({ type: 'submitted', user: trip.submittedBy ?? undefined, date: trip.submittedAt ?? undefined })
     }
     const merged = [...prefix, ...jsonEvents]
-    // Adiciona validated ao final se não estiver no JSON mas existir nos campos
     if (!types.has('validated') && (trip.validatedBy || trip.validatedAt)) {
       merged.push({ type: 'validated', user: trip.validatedBy ?? undefined, date: trip.validatedAt ?? undefined })
     }
-    // Ordena por data
     return merged.sort((a, b) => {
       if (!a.date) return -1
       if (!b.date) return 1
@@ -1026,14 +1028,45 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     })
   })()
 
+  // Último evento submitted (para exibir dados ao financeiro e ao colaborador após rejeição)
+  const lastSubmittedEvent = [...timeline].reverse().find(e => e.type === 'submitted')
+
   const tlConfig: Record<string, { icon: string; label: string; color: string; bg: string; border: string }> = {
     submitted: { icon: '📤', label: 'Prestação enviada',   color: '#92400e', bg: 'white',   border: '#e2e8f0' },
     validated: { icon: '✅', label: 'Prestação validada',  color: '#166534', bg: '#f0fdf4', border: '#86efac' },
     rejected:  { icon: '❌', label: 'Prestação rejeitada', color: '#991b1b', bg: '#fef2f2', border: '#fca5a5' },
   }
 
+  function ProofThumbs({ urls }: { urls: string[] }) {
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+        {urls.map((url, j) => {
+          const isImg = url.startsWith('data:image')
+          return isImg ? (
+            <img key={j} src={url} alt={`comprovante ${j + 1}`}
+              onClick={() => setLightboxUrl(url)}
+              style={{ height: '48px', width: '64px', objectFit: 'cover', borderRadius: '6px', border: '1.5px solid #e2e8f0', cursor: 'zoom-in', flexShrink: 0 }} />
+          ) : (
+            <a key={j} href={url} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#2563eb', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '6px', padding: '6px 10px', textDecoration: 'none', flexShrink: 0 }}>
+              📄 Comprovante {j + 1} ↗
+            </a>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <Modal title={`Prestação de Contas — ${trip.collaborator?.name ?? ''}`} onClose={onClose} wide>
+
+      {/* ── Lightbox para comprovantes do histórico */}
+      {lightboxUrl && (
+        <div onClick={() => setLightboxUrl(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
+          <img src={lightboxUrl} alt="comprovante" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
+          <button onClick={() => setLightboxUrl(null)} style={{ position: 'absolute', top: '20px', right: '24px', background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: '28px', cursor: 'pointer', borderRadius: '50%', width: '40px', height: '40px', lineHeight: '40px', textAlign: 'center' }}>✕</button>
+        </div>
+      )}
 
       {/* ── Status Banner */}
       <div style={{ background: statusConfig.bg, border: `2px solid ${statusConfig.border}`, borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1073,15 +1106,25 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', background: cfg.bg, borderRadius: '10px', border: `1.5px solid ${cfg.border}`, textAlign: 'left' }}>
                   <span style={{ fontSize: '18px', flexShrink: 0 }}>{cfg.icon}</span>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div>
                       <span style={{ fontSize: '13px', fontWeight: '700', color: cfg.color }}>
                         {cfg.label}{ev.user ? <> por <strong>{ev.user}</strong></> : ''}
                       </span>
                       {ev.date && <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '6px' }}>em {new Date(ev.date).toLocaleString('pt-BR')}</span>}
                     </div>
+                    {/* Dados de devolução da submissão */}
+                    {ev.type === 'submitted' && ev.returnedAmount != null && ev.returnedAmount > 0 && (
+                      <div style={{ marginTop: '6px', fontSize: '12px', color: '#92400e', background: '#fffbeb', borderRadius: '6px', padding: '5px 10px', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        💰 Valor devolvido: <strong>{formatCurrency(ev.returnedAmount)}</strong>
+                      </div>
+                    )}
+                    {ev.type === 'submitted' && ev.returnProofUrls && ev.returnProofUrls.length > 0 && (
+                      <ProofThumbs urls={ev.returnProofUrls} />
+                    )}
+                    {/* Motivo da rejeição */}
                     {ev.comment && (
-                      <div style={{ fontSize: '12px', color: '#991b1b', marginTop: '4px', background: '#fff', borderRadius: '6px', padding: '6px 10px', border: '1px solid #fca5a5' }}>
+                      <div style={{ fontSize: '12px', color: '#991b1b', marginTop: '6px', background: '#fff', borderRadius: '6px', padding: '6px 10px', border: '1px solid #fca5a5' }}>
                         💬 <em>{ev.comment}</em>
                       </div>
                     )}
@@ -1096,58 +1139,112 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
         {isClosed ? (
           <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px', textAlign: 'center' }}>✓ Viagem concluída e validada pelo financeiro.</div>
         ) : isSubmitted ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
-            <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Aguardando validação do financeiro.</div>
-            {!showRejectForm ? (
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
-                <Btn variant="danger" onClick={() => setShowRejectForm(true)} disabled={saving}>❌ Rejeitar</Btn>
-              </div>
-            ) : (
-              <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>Motivo da rejeição</div>
-                <textarea
-                  autoFocus
-                  placeholder="Descreva o motivo da rejeição para o colaborador..."
-                  value={rejectReason}
-                  onChange={e => setRejectReason(e.target.value)}
-                  rows={3}
-                  style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', resize: 'vertical', outline: 'none', width: '100%', boxSizing: 'border-box' }}
-                />
-                {rejectError && <div style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600' }}>⚠ {rejectError}</div>}
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                  <Btn variant="outline" onClick={() => { setShowRejectForm(false); setRejectReason(''); setRejectError('') }} disabled={saving}>Cancelar</Btn>
-                  <Btn variant="danger" onClick={handleRejeitar} disabled={saving}>{saving ? 'Rejeitando...' : '❌ Confirmar Rejeição'}</Btn>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Dados de devolução da submissão atual (para o financeiro revisar) */}
+            {lastSubmittedEvent && (lastSubmittedEvent.returnedAmount ?? 0) > 0 && (
+              <div style={{ background: 'white', border: '1.5px solid #fde68a', borderRadius: '12px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '12px', fontWeight: '700', color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Devolução enviada pelo colaborador</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#92400e', marginBottom: lastSubmittedEvent.returnProofUrls?.length ? '4px' : 0 }}>
+                  💰 {formatCurrency(lastSubmittedEvent.returnedAmount!)}
+                  {toReturn > 0 && Math.abs(lastSubmittedEvent.returnedAmount! - toReturn) > 0.01 && (
+                    <span style={{ fontSize: '11px', fontWeight: '600', color: '#dc2626', marginLeft: '8px' }}>(diferença de {formatCurrency(Math.abs(lastSubmittedEvent.returnedAmount! - toReturn))} em relação ao esperado)</span>
+                  )}
                 </div>
+                {lastSubmittedEvent.returnProofUrls && lastSubmittedEvent.returnProofUrls.length > 0 && (
+                  <ProofThumbs urls={lastSubmittedEvent.returnProofUrls} />
+                )}
               </div>
             )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+              <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Aguardando validação do financeiro.</div>
+              {!showRejectForm ? (
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
+                  <Btn variant="danger" onClick={() => setShowRejectForm(true)} disabled={saving}>❌ Rejeitar</Btn>
+                </div>
+              ) : (
+                <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>Motivo da rejeição</div>
+                  <textarea
+                    autoFocus
+                    placeholder="Descreva o motivo da rejeição para o colaborador..."
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                    rows={3}
+                    style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '10px 12px', fontSize: '13px', resize: 'vertical', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                  />
+                  {rejectError && <div style={{ color: '#dc2626', fontSize: '12px', fontWeight: '600' }}>⚠ {rejectError}</div>}
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <Btn variant="outline" onClick={() => { setShowRejectForm(false); setRejectReason(''); setRejectError('') }} disabled={saving}>Cancelar</Btn>
+                    <Btn variant="danger" onClick={handleRejeitar} disabled={saving}>{saving ? 'Rejeitando...' : '❌ Confirmar Rejeição'}</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', textAlign: 'center' }}>
             {isRejected && (
-              <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '10px', padding: '12px 16px', textAlign: 'left' }}>
+              <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '10px', padding: '14px 16px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>❌ Prestação rejeitada — corrija os itens indicados e reenvie.</div>
+                {/* Dados da tentativa anterior */}
+                {lastSubmittedEvent && (lastSubmittedEvent.returnedAmount ?? 0) > 0 && (
+                  <div style={{ background: 'white', border: '1px solid #fca5a5', borderRadius: '8px', padding: '10px 14px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '700', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Dados da tentativa anterior</div>
+                    <div style={{ fontSize: '13px', color: '#92400e', fontWeight: '600' }}>
+                      💰 Valor informado: <strong>{formatCurrency(lastSubmittedEvent.returnedAmount!)}</strong>
+                    </div>
+                    {lastSubmittedEvent.returnProofUrls && lastSubmittedEvent.returnProofUrls.length > 0 && (
+                      <ProofThumbs urls={lastSubmittedEvent.returnProofUrls} />
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {toReturn > 0 && (
               <div style={{ width: '100%', background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: '12px', padding: '16px 20px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '700', color: '#991b1b' }}>
-                  ↩ Você deve devolver <strong>{formatCurrency(toReturn)}</strong> à empresa. Informe o valor e anexe o comprovante.
+                  ↩ Você deve devolver <strong>{formatCurrency(toReturn)}</strong> à empresa. Informe o valor devolvido e anexe o(s) comprovante(s).
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Valor devolvido (R$)</label>
                     <input type="number" step="0.01" placeholder={toReturn.toFixed(2)} value={returnAmount} onChange={e => setReturnAmount(e.target.value)}
                       style={{ border: '1.5px solid #fca5a5', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', fontWeight: '700', width: '160px', color: '#991b1b', background: 'white', outline: 'none' }} />
+                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>Pode informar qualquer valor (ex: com ajustes)</div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Comprovante de devolução</label>
-                    <input ref={returnFileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleReturnFileChange} />
-                    <button onClick={() => returnFileRef.current?.click()}
-                      style={{ border: `1.5px solid ${returnProofUrl ? '#22c55e' : '#ef4444'}`, borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: returnProofUrl ? '#f0fdf4' : '#fff', color: returnProofUrl ? '#166534' : '#dc2626', cursor: 'pointer' }}>
-                      {returnProofUrl ? '✓ Comprovante anexado' : '📎 Anexar comprovante'}
-                    </button>
-                  </div>
+                </div>
+                {/* Comprovantes múltiplos */}
+                <div>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '6px' }}>Comprovantes de devolução</label>
+                  <input ref={returnFileRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleReturnFileChange} />
+                  <button onClick={() => returnFileRef.current?.click()}
+                    style={{ border: '1.5px solid #ef4444', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#fff', color: '#dc2626', cursor: 'pointer' }}>
+                    📎 Adicionar comprovante
+                  </button>
+                  {returnProofUrls.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+                      {returnProofUrls.map((url, idx) => {
+                        const isImg = url.startsWith('data:image')
+                        return (
+                          <div key={idx} style={{ position: 'relative', display: 'inline-block' }}>
+                            {isImg ? (
+                              <img src={url} alt={`comp ${idx + 1}`}
+                                onClick={() => setLightboxUrl(url)}
+                                style={{ height: '56px', width: '80px', objectFit: 'cover', borderRadius: '6px', border: '1.5px solid #22c55e', cursor: 'zoom-in', display: 'block' }} />
+                            ) : (
+                              <div style={{ padding: '8px 10px', background: '#f0fdf4', border: '1.5px solid #22c55e', borderRadius: '6px', fontSize: '12px', color: '#166534' }}>📄 {idx + 1}</div>
+                            )}
+                            <button onClick={() => setReturnProofUrls(p => p.filter((_, i) => i !== idx))}
+                              style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', border: 'none', background: '#ef4444', color: 'white', fontSize: '10px', cursor: 'pointer', lineHeight: '18px', textAlign: 'center', padding: 0 }}>✕</button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {returnProofUrls.length > 0 && (
+                    <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600', marginTop: '6px' }}>✓ {returnProofUrls.length} comprovante(s) anexado(s)</div>
+                  )}
                 </div>
               </div>
             )}

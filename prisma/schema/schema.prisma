@@ -1327,7 +1327,8 @@ model AuditTrip {
   releasedAmount Decimal  @db.Decimal(15, 4) @default(0)
   advancedAmount Decimal  @db.Decimal(15, 4) @default(0)
   returnedAmount Decimal  @db.Decimal(15, 4) @default(0)
-  returnProofUrl String?
+  returnProofUrl  String?
+  returnProofUrls String?   @db.Text
   returnProofNote String?
   returnedAt     DateTime?
   status         String   @default("OPEN")

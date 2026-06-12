@@ -1133,8 +1133,6 @@ function AbaViagens() {
                             </div>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={e => { e.stopPropagation(); setPrestacaoTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fde68a', background: '#fffbeb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#92400e' }}>📊 Prestação</button>
-                              <button onClick={e => { e.stopPropagation(); setExpenseTripId(t.id); setExpForm(f => ({ ...f, collaboratorId: t.collaboratorId ?? '' })); setShowExpense(true) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>+ Despesa</button>
-                              <button onClick={e => { e.stopPropagation(); setEditForm({ reason: t.reason ?? '', observations: t.observations ?? '', status: t.status ?? 'OPEN' }); setEditTripId(t.id); setError('') }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer' }}>Editar</button>
                               <button onClick={e => { e.stopPropagation(); setDeleteTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}>Excluir</button>
                             </div>
                           </div>

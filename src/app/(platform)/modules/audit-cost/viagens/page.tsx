@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, EmptyState, LoadingState, Btn } from '@/components/shared/module-page'
 import { formatDate, formatCurrency } from '@/lib/utils'
@@ -109,6 +109,60 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
                 <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
               )}
               <button onClick={() => { setOpen(false); setSearch('') }} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '8px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Multi-select de Colaboradores (filtro) ──────────────────────────────────
+function CollabMultiSelect({ collabs, selectedIds, onChange }: { collabs: any[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = collabs.filter(c => selectedIds.includes(c.id))
+  function toggle(id: string) { onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]) }
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white', cursor: 'pointer', minHeight: '38px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+        {!selectedIds.length && <span style={{ color: '#94a3b8' }}>Todos</span>}
+        {selected.map((c: any) => (
+          <span key={c.id} style={{ background: '#dbeafe', color: '#1e40af', fontSize: '12px', fontWeight: '600', padding: '2px 8px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            {c.name}
+            <button onClick={e => { e.stopPropagation(); toggle(c.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', lineHeight: 1, padding: 0, fontSize: '13px' }}>×</button>
+          </span>
+        ))}
+        <span style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '11px', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginTop: '4px', minWidth: '200px' }}>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {collabs.map((c: any) => {
+              const isSel = selectedIds.includes(c.id)
+              return (
+                <div key={c.id} onClick={() => toggle(c.id)} style={{ padding: '9px 14px', cursor: 'pointer', background: isSel ? '#eff6ff' : 'transparent', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}
+                  onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
+                  onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+                  <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {isSel && <span style={{ color: 'white', fontSize: '10px' }}>✓</span>}
+                  </div>
+                  <span style={{ color: '#0f172a' }}>{c.name}</span>
+                  {c.role && <span style={{ color: '#94a3b8', fontSize: '12px', marginLeft: 'auto' }}>{c.role}</span>}
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedIds.length} selecionado(s)</span>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              {selectedIds.length > 0 && <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>}
+              <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '8px', padding: '5px 14px', cursor: 'pointer' }}>Confirmar</button>
             </div>
           </div>
         </div>
@@ -1063,7 +1117,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
 // ─── Aba: Viagens ─────────────────────────────────────────────────────────────
 function AbaViagens() {
   const [page, setPage] = useState(1)
-  const [filterCollab, setFilterCollab] = useState('')
+  const [filterCollabs, setFilterCollabs] = useState<string[]>([])
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
@@ -1081,7 +1135,7 @@ function AbaViagens() {
   const utils = trpc.useUtils()
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
     page, pageSize: 15,
-    collaboratorId: filterCollab || undefined,
+    collaboratorIds: filterCollabs.length ? filterCollabs : undefined,
     search: filterSearch || undefined,
     startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
     startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
@@ -1217,10 +1271,7 @@ function AbaViagens() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
             <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colaborador</label>
-            <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white' }}>
-              <option value="">Todos</option>
-              {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <CollabMultiSelect collabs={collabs ?? []} selectedIds={filterCollabs} onChange={ids => { setFilterCollabs(ids); setPage(1) }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>De</label>
@@ -1230,8 +1281,8 @@ function AbaViagens() {
             <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
             <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
           </div>
-          {(filterCollab || filterSearch || filterFrom || filterTo) && (
-            <button onClick={() => { setFilterCollab(''); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+          {!!(filterCollabs.length || filterSearch || filterFrom || filterTo) && (
+            <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
               style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
               ✕ Limpar
             </button>
@@ -1321,7 +1372,7 @@ function AbaViagens() {
 // ─── Aba: Viagens Concluídas ──────────────────────────────────────────────────
 function AbaConcluidas() {
   const [page, setPage] = useState(1)
-  const [filterCollab, setFilterCollab] = useState('')
+  const [filterCollabs, setFilterCollabs] = useState<string[]>([])
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
@@ -1329,7 +1380,7 @@ function AbaConcluidas() {
 
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
     page, pageSize: 15, status: 'CLOSED',
-    collaboratorId: filterCollab || undefined,
+    collaboratorIds: filterCollabs.length ? filterCollabs : undefined,
     search: filterSearch || undefined,
     startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
     startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
@@ -1338,7 +1389,7 @@ function AbaConcluidas() {
   const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
 
   const trips = data?.trips ?? []
-  const hasFilters = filterCollab || filterSearch || filterFrom || filterTo
+  const hasFilters = filterCollabs.length || filterSearch || filterFrom || filterTo
 
   return (
     <>
@@ -1356,10 +1407,7 @@ function AbaConcluidas() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colaborador</label>
-          <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white' }}>
-            <option value="">Todos</option>
-            {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <CollabMultiSelect collabs={collabs ?? []} selectedIds={filterCollabs} onChange={ids => { setFilterCollabs(ids); setPage(1) }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>De</label>
@@ -1369,8 +1417,8 @@ function AbaConcluidas() {
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
           <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
         </div>
-        {hasFilters && (
-          <button onClick={() => { setFilterCollab(''); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+        {!!hasFilters && (
+          <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
             style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
             ✕ Limpar
           </button>

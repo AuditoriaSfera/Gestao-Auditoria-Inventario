@@ -8,6 +8,7 @@ export const auditTripsRouter = createTRPCRouter({
       page: z.number().default(1),
       pageSize: z.number().default(20),
       collaboratorId: z.string().optional(),
+      collaboratorIds: z.array(z.string()).optional(),
       status: z.string().optional(),
       search: z.string().optional(),
       startDateFrom: z.date().optional(),
@@ -15,9 +16,14 @@ export const auditTripsRouter = createTRPCRouter({
     }))
     .query(async ({ input, ctx }) => {
       const { skip, take } = paginate(input.page, input.pageSize)
+      const collabFilter = input.collaboratorIds?.length
+        ? { collaboratorId: { in: input.collaboratorIds } }
+        : input.collaboratorId
+        ? { collaboratorId: input.collaboratorId }
+        : {}
       const where: any = {
         deletedAt: null,
-        ...(input.collaboratorId && { collaboratorId: input.collaboratorId }),
+        ...collabFilter,
         ...(input.status && { status: input.status }),
         ...(input.search && { OR: [
           { stores: { contains: input.search, mode: 'insensitive' } },

@@ -2,12 +2,12 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, EmptyState, LoadingState, Btn } from '@/components/shared/module-page'
 import { formatDate, formatCurrency } from '@/lib/utils'
 
-const STATUS_LABELS: Record<string, string> = { OPEN: 'Aberta', CLOSED: 'Fechada', CANCELLED: 'Cancelada' }
+const STATUS_LABELS: Record<string, string> = { OPEN: 'Aberta', CLOSED: 'Fechada', CANCELLED: 'Cancelada', SUBMITTED: 'Enviada' }
 const PAYMENT_METHODS = ['Adiantamento','Cartão Corporativo','Cartão Combustível','Pix','Dinheiro','Reembolso']
 const DIAS_SEMANA = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
 const DEFAULT_COST_TYPES = ['Alimentação','Hospedagem','Combustível','Pedágio','Estacionamento','Passagem','Aluguel de carro','Carro de aplicativo','Outros']
@@ -102,12 +102,15 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
               )
             })}
           </div>
-          {selectedIds.length > 0 && (
-            <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedIds.length} loja(s)</span>
-              <button onClick={() => { onChange([]); setOpen(false) }} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedIds.length} loja(s)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {selectedIds.length > 0 && (
+                <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+              )}
+              <button onClick={() => { setOpen(false); setSearch('') }} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '8px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
@@ -146,7 +149,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
             )
           })}
           <div style={{ padding: '6px 10px', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
-            <button onClick={() => setOpen(false)} style={{ fontSize: '11px', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer' }}>Fechar ✕</button>
+            <button onClick={() => setOpen(false)} style={{ fontSize: '11px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer' }}>Confirmar</button>
           </div>
         </div>
       )}
@@ -587,54 +590,247 @@ function AbaTiposCusto() {
 }
 
 // ─── Tabela de Verificação (Prestação) ───────────────────────────────────────
+type NewLancamento = { value: string }
+
 function TabelaVerificacao({ trip }: { trip: any }) {
-  const expenses: any[] = trip.expenses ?? []
-  if (!expenses.length) return <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '24px' }}>Nenhuma despesa lançada.</div>
-  const byDate: Record<string, any[]> = {}
-  for (const e of expenses) { const d = new Date(e.date).toISOString().slice(0, 10); if (!byDate[d]) byDate[d] = []; byDate[d].push(e) }
-  const tiposSet = new Set<string>()
-  for (const e of expenses) tiposSet.add(e.type)
-  const tipos = Array.from(tiposSet).sort()
-  const datas = Object.keys(byDate).sort()
-  const totaisPorTipo: Record<string, number> = {}
-  for (const tipo of tipos) totaisPorTipo[tipo] = 0
-  const rows = datas.map(d => {
-    const row: Record<string, number> = {}
-    for (const tipo of tipos) row[tipo] = 0
-    for (const e of byDate[d]) row[e.type] = (row[e.type] ?? 0) + Number(e.value)
-    for (const tipo of tipos) totaisPorTipo[tipo] += row[tipo]
-    const total = Object.values(row).reduce((a, b) => a + b, 0)
-    const data = new Date(d + 'T12:00:00')
-    const lojas = [...new Set(byDate[d].map((e: any) => e.storeName).filter(Boolean))].join(', ')
-    return { data, d, row, total, lojas }
+  const allExpenses: any[] = trip.expenses ?? []
+  // Originals = solicitações (advances, locked) — gastos = lançamentos de prestação
+  const originalExp = allExpenses.filter((e: any) => e.subtype !== 'gasto')
+  const gastoExp    = allExpenses.filter((e: any) => e.subtype === 'gasto')
+
+  const utils = trpc.useUtils()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const pendingSaveRef = useRef<{ date: string; idx: number } | null>(null)
+  const [attachingId, setAttachingId] = useState<string | null>(null)
+
+  const [attachments, setAttachments] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {}
+    for (const e of gastoExp) init[e.id] = e.attachmentUrl ?? ''
+    return init
   })
-  const totalGeral = rows.reduce((s, r) => s + r.total, 0)
-  const thSt: React.CSSProperties = { padding: '10px 12px', textAlign: 'left', fontSize: '12px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }
-  const tdSt: React.CSSProperties = { padding: '9px 12px', fontSize: '13px', color: '#0f172a', borderBottom: '1px solid #f1f5f9' }
-  const tdNum: React.CSSProperties = { ...tdSt, textAlign: 'right', fontWeight: '600', color: '#1e40af' }
+  const [newRows, setNewRows] = useState<Record<string, NewLancamento[]>>({})
+  const [savingAttach, setSavingAttach] = useState<string | null>(null)
+  const [savingNew, setSavingNew] = useState<string | null>(null)
+
+  const setAttachMut = trpc.auditCost.setExpenseAttachment.useMutation({
+    onSuccess: () => { setSavingAttach(null); utils.auditTrips.getById.invalidate({ id: trip.id }) },
+    onError: () => setSavingAttach(null),
+  })
+  const createMut = trpc.auditCost.createExpense.useMutation({
+    onSuccess: () => {
+      if (pendingSaveRef.current) {
+        const { date: dk, idx } = pendingSaveRef.current
+        setNewRows(r => { const cp = [...(r[dk] ?? [])]; cp.splice(idx, 1); return { ...r, [dk]: cp } })
+        pendingSaveRef.current = null
+      }
+      setSavingNew(null)
+      utils.auditTrips.getById.invalidate({ id: trip.id })
+    },
+    onError: () => { pendingSaveRef.current = null; setSavingNew(null) },
+  })
+  const deleteExpMut = trpc.auditCost.deleteExpense.useMutation({
+    onSuccess: () => utils.auditTrips.getById.invalidate({ id: trip.id }),
+  })
+
+  function saveAttachment(id: string, url?: string) {
+    setSavingAttach(id)
+    setAttachMut.mutate({ id, attachmentUrl: (url ?? attachments[id]) || undefined })
+  }
+  function saveNewRow(date: string, idx: number) {
+    const row = (newRows[date] ?? [])[idx]
+    if (!row || !parseMoney(row.value)) return
+    pendingSaveRef.current = { date, idx }
+    setSavingNew(`${date}-${idx}`)
+    const ref = (byDateOrig[date] ?? [])[0]
+    createMut.mutate({
+      auditorId: trip.auditorId,
+      tripId: trip.id,
+      collaboratorId: trip.collaboratorId ?? undefined,
+      subtype: 'gasto',
+      type: ref?.type ?? DEFAULT_COST_TYPES[0],
+      storeName: ref?.storeName ?? trip.stores ?? undefined,
+      paymentMethod: 'Gasto',
+      date: new Date(date + 'T12:00:00'),
+      value: parseMoney(row.value),
+    })
+  }
+  function handleFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
+    const file = ev.target.files?.[0]
+    if (!file || !attachingId) return
+    const reader = new FileReader()
+    reader.onload = e => {
+      const url = e.target?.result as string
+      setAttachments(a => ({ ...a, [attachingId]: url }))
+      saveAttachment(attachingId, url)
+      setAttachingId(null)
+    }
+    reader.readAsDataURL(file)
+    ev.target.value = ''
+  }
+
+  // Build date maps
+  const byDateOrig: Record<string, any[]> = {}
+  for (const e of originalExp) {
+    const d = new Date(e.date).toISOString().slice(0, 10)
+    if (!byDateOrig[d]) byDateOrig[d] = []
+    byDateOrig[d].push(e)
+  }
+  const byDateGasto: Record<string, any[]> = {}
+  for (const e of gastoExp) {
+    const d = new Date(e.date).toISOString().slice(0, 10)
+    if (!byDateGasto[d]) byDateGasto[d] = []
+    byDateGasto[d].push(e)
+  }
+  for (const d of Object.keys(newRows)) { if (!byDateOrig[d]) byDateOrig[d] = [] }
+  const datas = [...new Set([...Object.keys(byDateOrig), ...Object.keys(byDateGasto)])].sort()
+  const totalGastoGeral = gastoExp.reduce((s: number, e: any) => s + Number(e.value), 0)
+  const totalOrigGeral  = originalExp.reduce((s: number, e: any) => s + Number(e.value), 0)
+
+  const thSt: React.CSSProperties = { padding: '9px 12px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap', textAlign: 'left' }
+
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-        <thead><tr>
-          <th style={thSt}>Data</th><th style={thSt}>Dia de semana</th>
-          <th style={{ ...thSt, minWidth: '120px' }}>Lojas</th>
-          {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right' }}>{t}</th>)}
-          <th style={{ ...thSt, textAlign: 'right', color: '#0f172a' }}>Total</th>
-        </tr></thead>
-        <tbody>{rows.map(r => (
-          <tr key={r.d}>
-            <td style={tdSt}>{r.data.toLocaleDateString('pt-BR')}</td>
-            <td style={{ ...tdSt, color: '#64748b' }}>{DIAS_SEMANA[r.data.getDay()]}</td>
-            <td style={{ ...tdSt, color: '#64748b', fontSize: '12px' }}>{r.lojas || '—'}</td>
-            {tipos.map(t => <td key={t} style={r.row[t] > 0 ? tdNum : { ...tdSt, textAlign: 'right', color: '#cbd5e1' }}>{r.row[t] > 0 ? formatCurrency(r.row[t]) : '—'}</td>)}
-            <td style={{ ...tdNum, fontWeight: '800', color: '#0f172a' }}>{formatCurrency(r.total)}</td>
+      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFileChange} />
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{ ...thSt, width: '110px' }}>Data</th>
+            <th style={{ ...thSt, width: '160px' }}>Solicitação</th>
+            <th style={thSt}>Lançamentos de Gasto</th>
+            <th style={{ ...thSt, textAlign: 'right', width: '95px' }}>Adiantado</th>
+            <th style={{ ...thSt, textAlign: 'right', width: '95px' }}>Total Gasto</th>
+            <th style={{ ...thSt, textAlign: 'right', width: '95px' }}>Saldo</th>
           </tr>
-        ))}</tbody>
-        <tfoot><tr style={{ background: '#f8fafc' }}>
-          <td colSpan={3} style={{ ...tdSt, fontWeight: '700', borderTop: '2px solid #e2e8f0' }}>Total</td>
-          {tipos.map(t => <td key={t} style={{ ...tdNum, borderTop: '2px solid #e2e8f0' }}>{formatCurrency(totaisPorTipo[t])}</td>)}
-          <td style={{ ...tdNum, borderTop: '2px solid #e2e8f0', fontWeight: '900', color: '#0f172a', fontSize: '15px' }}>{formatCurrency(totalGeral)}</td>
-        </tr></tfoot>
+        </thead>
+        <tbody>
+          {datas.length === 0 && (
+            <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Nenhuma solicitação registrada nesta viagem.</td></tr>
+          )}
+          {datas.map(d => {
+            const dayOrig   = byDateOrig[d] ?? []
+            const dayGastos = byDateGasto[d] ?? []
+            const pending   = newRows[d] ?? []
+            const totalAdt  = dayOrig.reduce((s: number, e: any) => s + Number(e.value), 0)
+            const totalGst  = dayGastos.reduce((s: number, e: any) => s + Number(e.value), 0)
+            const saldo     = totalAdt - totalGst
+            const data      = new Date(d + 'T12:00:00')
+            const saldoColor = saldo > 0.01 ? '#15803d' : saldo < -0.01 ? '#dc2626' : '#64748b'
+            const saldoBg   = saldo > 0.01 ? '#f0fdf4' : saldo < -0.01 ? '#fef2f2' : '#f8fafc'
+
+            return (
+              <tr key={d} style={{ borderBottom: '2px solid #e2e8f0', verticalAlign: 'top' }}>
+
+                {/* ── Data ── */}
+                <td style={{ padding: '12px 10px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                  <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
+                  <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
+                </td>
+
+                {/* ── Solicitação original (locked, read-only) ── */}
+                <td style={{ padding: '10px 10px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                  {dayOrig.map((e: any) => (
+                    <div key={e.id} style={{ marginBottom: '4px', padding: '5px 8px', background: '#f1f5f9', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '10px', fontWeight: '600', color: '#475569' }}>{e.type}</div>
+                      {e.storeName && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{e.storeName}</div>}
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginTop: '3px' }}>{formatCurrency(Number(e.value))}</div>
+                    </div>
+                  ))}
+                  {dayOrig.length === 0 && <span style={{ fontSize: '11px', color: '#94a3b8' }}>—</span>}
+                </td>
+
+                {/* ── Lançamentos de gasto ── */}
+                <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0' }}>
+                  {/* Gastos salvos (valor imutável, só excluir) */}
+                  {dayGastos.map((e: any) => {
+                    // Fallback para attachmentUrl do banco caso o estado local não tenha sido inicializado
+                    const attachUrl = attachments[e.id] || e.attachmentUrl || ''
+                    const hasAttach = !!attachUrl
+                    const isImg = hasAttach && attachUrl.startsWith('data:image')
+                    return (
+                      <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
+                          R$ {Number(e.value).toFixed(2).replace('.', ',')}
+                        </span>
+                        <button onClick={() => { setAttachingId(e.id); fileInputRef.current?.click() }}
+                          style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#e2e8f0'}`, background: hasAttach ? '#22c55e' : '#f8fafc', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#64748b', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
+                        </button>
+                        {isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer">
+                          <img src={attachUrl} alt="comp" style={{ height: '22px', width: '33px', borderRadius: '3px', border: '1px solid #e2e8f0', objectFit: 'cover' }} />
+                        </a>}
+                        {hasAttach && !isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#2563eb' }}>Ver ↗</a>}
+                        <button onClick={() => deleteExpMut.mutate({ id: e.id })}
+                          title="Excluir lançamento"
+                          style={{ padding: '2px 6px', borderRadius: '5px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
+                      </div>
+                    )
+                  })}
+
+                  {/* Pendentes (novos ainda não salvos) */}
+                  {pending.map((row, idx) => {
+                    const key = `${d}-${idx}`
+                    const ok = parseMoney(row.value) > 0
+                    return (
+                      <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '6px 10px', background: '#fffbeb', borderRadius: '7px', marginTop: '5px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>R$</span>
+                          <input autoFocus
+                            style={{ ...inpSm, width: '82px', textAlign: 'right', fontWeight: '700', padding: '4px 8px' }}
+                            placeholder="0,00" value={row.value}
+                            onChange={ev => setNewRows(r => { const cp = [...(r[d] ?? [])]; cp[idx] = { value: ev.target.value }; return { ...r, [d]: cp } })}
+                            onKeyDown={ev => { if (ev.key === 'Enter' && ok) saveNewRow(d, idx) }}
+                            inputMode="decimal" />
+                        </div>
+                        <button onClick={() => saveNewRow(d, idx)} disabled={savingNew === key || !ok}
+                          style={{ padding: '3px 12px', borderRadius: '6px', border: 'none', background: ok ? '#2563eb' : '#cbd5e1', color: 'white', cursor: ok ? 'pointer' : 'not-allowed', fontSize: '11px', fontWeight: '600', flexShrink: 0 }}>
+                          {savingNew === key ? '…' : 'Salvar'}
+                        </button>
+                        <button onClick={() => setNewRows(r => { const cp = [...(r[d] ?? [])]; cp.splice(idx, 1); return { ...r, [d]: cp } })}
+                          style={{ padding: '3px 7px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '12px', flexShrink: 0 }}>✕</button>
+                      </div>
+                    )
+                  })}
+
+                  <button onClick={() => setNewRows(r => ({ ...r, [d]: [...(r[d] ?? []), { value: '' }] }))}
+                    style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600', padding: '6px 0 2px', marginTop: '4px', display: 'block' }}>
+                    + Adicionar lançamento
+                  </button>
+                </td>
+
+                {/* ── Adiantado ── */}
+                <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                  <span style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(totalAdt)}</span>
+                </td>
+
+                {/* ── Total Gasto ── */}
+                <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                  <span style={{ fontWeight: '700', fontSize: '13px', color: totalGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(totalGst)}</span>
+                  {dayGastos.length > 0 && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>{dayGastos.length} item{dayGastos.length !== 1 ? 's' : ''}</div>}
+                </td>
+
+                {/* ── Saldo ── */}
+                <td style={{ padding: '12px 10px', textAlign: 'right', background: saldoBg, verticalAlign: 'top' }}>
+                  <span style={{ fontWeight: '800', fontSize: '13px', color: saldoColor }}>
+                    {saldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(saldo))}
+                  </span>
+                  <div style={{ fontSize: '9px', color: saldoColor, marginTop: '2px', fontWeight: '600', opacity: 0.85 }}>
+                    {saldo > 0.01 ? 'disponível' : saldo < -0.01 ? 'a receber' : '✓ ok'}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ background: '#e2e8f0' }}>
+            <td colSpan={3} style={{ padding: '11px 12px', fontWeight: '700', fontSize: '12px', color: '#374151', borderTop: '2px solid #cbd5e1' }}>TOTAL GERAL</td>
+            <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#6d28d9', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalOrigGeral)}</td>
+            <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '900', fontSize: '15px', color: '#0f172a', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalGastoGeral)}</td>
+            <td style={{ padding: '11px 10px', textAlign: 'right', borderTop: '2px solid #cbd5e1', background: (totalOrigGeral - totalGastoGeral) > 0.01 ? '#f0fdf4' : (totalOrigGeral - totalGastoGeral) < -0.01 ? '#fef2f2' : '#f8fafc' }}>
+              {(() => { const s = totalOrigGeral - totalGastoGeral; const c = s > 0.01 ? '#15803d' : s < -0.01 ? '#dc2626' : '#64748b'; return (<><span style={{ fontWeight: '900', fontSize: '15px', color: c }}>{s > 0.01 ? '+' : ''}{formatCurrency(Math.abs(s))}</span><div style={{ fontSize: '9px', color: c, fontWeight: '600', marginTop: '2px' }}>{s > 0.01 ? 'disponível' : s < -0.01 ? 'a receber' : '✓ ok'}</div></>) })()}
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   )
@@ -643,44 +839,99 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 // ─── Modal Prestação de Contas ────────────────────────────────────────────────
 function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const utils = trpc.useUtils()
-  const spentAmount = (trip.expenses ?? []).reduce((s: number, e: any) => s + Number(e.value), 0)
-  const advancedAmount = Number(trip.advancedAmount ?? 0)
-  const returnedAmount = Number(trip.returnedAmount ?? 0)
-  const expectedReturn = Math.max(0, advancedAmount - spentAmount)
-  const settled = returnedAmount > 0 && Math.abs(returnedAmount - expectedReturn) < 0.01
-  const [devolvido, setDevolvido] = useState(returnedAmount > 0 ? returnedAmount.toFixed(2).replace('.', ',') : '')
-  const [comprovante, setComprovante] = useState(trip.returnProofUrl ?? '')
-  const [nota, setNota] = useState(trip.returnProofNote ?? '')
+  const expenses: any[] = trip.expenses ?? []
+  // Lançamentos de gasto (subtype === 'gasto') = o que o colaborador realmente gastou
+  const gastoExpenses    = expenses.filter((e: any) => e.subtype === 'gasto')
+  const originalExpenses = expenses.filter((e: any) => e.subtype !== 'gasto')
+  const spentAmount    = gastoExpenses.reduce((s: number, e: any) => s + Number(e.value), 0)
+  // advancedAmount = soma das solicitações originais (o que foi adiantado por linha de despesa)
+  const advancedAmount = originalExpenses.reduce((s: number, e: any) => s + Number(e.value), 0) || Number(trip.advancedAmount ?? 0)
+  const balance = advancedAmount - spentAmount          // + = deve devolver  /  - = deve receber
+  const toReturn  = Math.max(0, balance)
+  const toReceive = Math.max(0, -balance)
+  const balanced = Math.abs(balance) < 0.01
+  const isClosed = trip.status === 'CLOSED'
+  const isSubmitted = trip.status === 'SUBMITTED'
   const [saving, setSaving] = useState(false)
-  const settleMut = trpc.auditTrips.updateSettlement.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); utils.auditTrips.getById.invalidate({ id: trip.id }); setSaving(false) }, onError: () => setSaving(false) })
-  function handleSave() { setSaving(true); settleMut.mutate({ id: trip.id, returnedAmount: devolvido ? parseMoney(devolvido) : 0, returnProofUrl: comprovante || undefined, returnProofNote: nota || undefined, returnedAt: devolvido ? new Date() : undefined }) }
-  const cardSt = (color: string, bg: string): React.CSSProperties => ({ background: bg, border: `1.5px solid ${color}`, borderRadius: '12px', padding: '14px 18px', textAlign: 'center', flex: 1, minWidth: '100px' })
+
+  const updateStatusMut = trpc.auditTrips.update.useMutation({
+    onSuccess: () => { utils.auditTrips.list.invalidate(); utils.auditTrips.getById.invalidate({ id: trip.id }); setSaving(false) },
+    onError: () => setSaving(false),
+  })
+  function handleEnviar() { setSaving(true); updateStatusMut.mutate({ id: trip.id, status: 'SUBMITTED' }) }
+  function handleValidar() { setSaving(true); updateStatusMut.mutate({ id: trip.id, status: 'CLOSED' }) }
+
+  // ── Status banner config ──────────────────────────────────────────────────
+  const statusConfig = isClosed || balanced
+    ? { bg: '#f0fdf4', border: '#86efac', dot: '#22c55e', text: '#166534', icon: '✓', msg: balanced ? 'Valores perfeitamente compensados.' : 'Prestação validada e concluída.' }
+    : isSubmitted
+    ? { bg: '#fef9c3', border: '#fde68a', dot: '#f59e0b', text: '#92400e', icon: '⏳', msg: 'Prestação enviada — aguardando validação do financeiro.' }
+    : toReturn > 0
+      ? { bg: '#fef2f2', border: '#fca5a5', dot: '#ef4444', text: '#991b1b', icon: '↩', msg: `Colaborador deve devolver ${formatCurrency(toReturn)} à empresa.` }
+      : { bg: '#eff6ff', border: '#93c5fd', dot: '#3b82f6', text: '#1e40af', icon: '↪', msg: `Empresa deve reembolsar ${formatCurrency(toReceive)} ao colaborador.` }
+
+  // ── Card helper ───────────────────────────────────────────────────────────
+  function SummaryCard({ label, value, sub, color, bg, border }: { label: string; value: string; sub?: string; color: string; bg: string; border: string }) {
+    return (
+      <div style={{ background: bg, border: `1.5px solid ${border}`, borderRadius: '12px', padding: '14px 16px', flex: '1 1 120px', minWidth: '110px' }}>
+        <div style={{ fontSize: '10px', fontWeight: '700', color, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>{label}</div>
+        <div style={{ fontSize: '19px', fontWeight: '800', color, lineHeight: 1.2 }}>{value}</div>
+        {sub && <div style={{ fontSize: '11px', color, opacity: 0.75, marginTop: '3px' }}>{sub}</div>}
+      </div>
+    )
+  }
+
+
   return (
     <Modal title={`Prestação de Contas — ${trip.collaborator?.name ?? ''}`} onClose={onClose} wide>
+
+      {/* ── Status Banner ─────────────────────────────────────────────────── */}
+      <div style={{ background: statusConfig.bg, border: `2px solid ${statusConfig.border}`, borderRadius: '12px', padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: statusConfig.dot, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>{statusConfig.icon}</span>
+        </div>
+        <div>
+          <div style={{ fontSize: '15px', fontWeight: '700', color: statusConfig.text }}>{statusConfig.msg}</div>
+          {trip.stores && <div style={{ fontSize: '12px', color: statusConfig.text, opacity: 0.75, marginTop: '2px' }}>Viagem: {trip.stores} · {trip.reason ?? ''}</div>}
+        </div>
+        {isClosed && (
+          <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>CONCLUÍDA</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Cards de resumo ───────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '24px' }}>
-        <div style={cardSt('#bfdbfe','#eff6ff')}><div style={{ fontSize: '11px', fontWeight: '600', color: '#1e40af', marginBottom: '4px' }}>LIBERADO</div><div style={{ fontSize: '20px', fontWeight: '800', color: '#1e3a8a' }}>{formatCurrency(Number(trip.releasedAmount??0))}</div></div>
-        <div style={cardSt('#bbf7d0','#f0fdf4')}><div style={{ fontSize: '11px', fontWeight: '600', color: '#166534', marginBottom: '4px' }}>ADIANTADO</div><div style={{ fontSize: '20px', fontWeight: '800', color: '#14532d' }}>{formatCurrency(advancedAmount)}</div></div>
-        <div style={cardSt('#fde68a','#fffbeb')}><div style={{ fontSize: '11px', fontWeight: '600', color: '#92400e', marginBottom: '4px' }}>GASTO</div><div style={{ fontSize: '20px', fontWeight: '800', color: '#78350f' }}>{formatCurrency(spentAmount)}</div></div>
-        <div style={cardSt(expectedReturn>0?'#fca5a5':'#bbf7d0',expectedReturn>0?'#fef2f2':'#f0fdf4')}><div style={{ fontSize: '11px', fontWeight: '600', color: expectedReturn>0?'#991b1b':'#166534', marginBottom: '4px' }}>A DEVOLVER</div><div style={{ fontSize: '20px', fontWeight: '800', color: expectedReturn>0?'#7f1d1d':'#14532d' }}>{formatCurrency(expectedReturn)}</div></div>
+        <SummaryCard label="Adiantado"   value={formatCurrency(advancedAmount)} color="#6d28d9" bg="#f5f3ff" border="#c4b5fd" />
+        <SummaryCard label="Total Gasto" value={formatCurrency(spentAmount)} sub={`${gastoExpenses.length} lançamento${gastoExpenses.length !== 1 ? 's' : ''}`} color="#92400e" bg="#fffbeb" border="#fde68a" />
+        <SummaryCard label="A Devolver"  value={formatCurrency(toReturn)}  color={toReturn  > 0 ? '#991b1b' : '#94a3b8'} bg={toReturn  > 0 ? '#fef2f2' : '#f8fafc'} border={toReturn  > 0 ? '#fca5a5' : '#e2e8f0'} sub={toReturn  > 0 ? 'colaborador → empresa' : undefined} />
+        <SummaryCard label="Reembolso"   value={formatCurrency(toReceive)} color={toReceive > 0 ? '#1e40af' : '#94a3b8'} bg={toReceive > 0 ? '#eff6ff' : '#f8fafc'} border={toReceive > 0 ? '#93c5fd' : '#e2e8f0'} sub={toReceive > 0 ? 'empresa → colaborador' : undefined} />
       </div>
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '10px' }}>Verificação por Dia</div>
-        <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}><TabelaVerificacao trip={trip} /></div>
+
+      {/* ── Lançamentos por dia ───────────────────────────────────────────── */}
+      <div style={{ fontSize: '13px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Verificação por Dia</div>
+      <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '24px' }}>
+        <TabelaVerificacao trip={trip} />
       </div>
-      <div style={{ background: settled?'#f0fdf4':'#f8fafc', border: `2px solid ${settled?'#86efac':'#e2e8f0'}`, borderRadius: '14px', padding: '20px', transition: 'all 0.3s' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: settled?'#22c55e':'#f59e0b' }} />
-          <span style={{ fontSize: '14px', fontWeight: '700', color: settled?'#166534':'#92400e' }}>{settled?'✓ Prestação liquidada — valores conferem!':expectedReturn>0?'Aguardando devolução':'Sem saldo a devolver'}</span>
-        </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Field label="Valor devolvido (R$)" row><input style={inp} value={devolvido} onChange={e => setDevolvido(e.target.value)} placeholder="0,00" inputMode="decimal" /></Field>
-          <Field label="Data da devolução" row><input style={inp} type="date" defaultValue={trip.returnedAt?new Date(trip.returnedAt).toISOString().slice(0,10):''} readOnly /></Field>
-        </div>
-        <Field label="Link / nº do comprovante" hint="PIX, transferência ou recibo"><input style={inp} value={comprovante} onChange={e => setComprovante(e.target.value)} placeholder="Ex: txid_abc123" /></Field>
-        <Field label="Observações da devolução"><textarea style={{ ...inp, minHeight: '60px', resize: 'vertical' }} value={nota} onChange={e => setNota(e.target.value)} /></Field>
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+
+      {/* ── Ação ─────────────────────────────────────────────────────────── */}
+      <div style={{ background: isClosed ? '#f0fdf4' : isSubmitted ? '#fef9c3' : '#f8fafc', border: `2px solid ${isClosed ? '#86efac' : isSubmitted ? '#fde68a' : '#e2e8f0'}`, borderRadius: '14px', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', textAlign: 'center' }}>
+        {isClosed ? (
+          <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px' }}>✓ Viagem concluída e validada pelo financeiro.</div>
+        ) : isSubmitted ? (
+          <>
+            <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Prestação enviada — aguardando validação do financeiro.</div>
+            <Btn onClick={handleValidar} disabled={saving}>{saving ? 'Validando...' : '✅ Validar Prestação'}</Btn>
+          </>
+        ) : (
+          <>
+            <div style={{ color: '#64748b', fontSize: '13px' }}>Revise os lançamentos acima e envie a prestação de contas para validação.</div>
+            <Btn onClick={handleEnviar} disabled={saving}>{saving ? 'Enviando...' : '📤 Enviar Prestação de Contas'}</Btn>
+          </>
+        )}
+        <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
           <Btn variant="outline" onClick={onClose}>Fechar</Btn>
-          <Btn onClick={handleSave} disabled={saving}>{saving?'Salvando...':'Salvar Liquidação'}</Btn>
         </div>
       </div>
     </Modal>
@@ -697,7 +948,7 @@ function AbaViagens() {
   const [showExpense, setShowExpense] = useState(false)
   const [expenseTripId, setExpenseTripId] = useState<string | null>(null)
   const [expForm, setExpForm] = useState({ collaboratorId: '', type: '', paymentMethod: 'Adiantamento', date: new Date().toISOString().slice(0,10), value: '', storeName: '', cityUf: '', description: '', observations: '' })
-  const [expandedTrip, setExpandedTrip] = useState<string | null>(null)
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
   const [prestacaoTripId, setPrestacaoTripId] = useState<string | null>(null)
   const [deleteTripId, setDeleteTripId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -707,7 +958,6 @@ function AbaViagens() {
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
   const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
-  const { data: tripDetail } = trpc.auditTrips.getById.useQuery({ id: expandedTrip! }, { enabled: !!expandedTrip })
   const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
   const storesList = storesData?.stores ?? []
   const tiposDisponiveis = costTypes && costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
@@ -715,14 +965,23 @@ function AbaViagens() {
   const updateTripMut = trpc.auditTrips.update.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setEditTripId(null); setError('') }, onError: e => setError(e.message) })
   const deleteTripMut = trpc.auditTrips.delete.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setDeleteTripId(null) } })
   const createExpMut = trpc.auditCost.createExpense.useMutation({
-    onSuccess: () => { utils.auditTrips.list.invalidate(); if (expandedTrip) utils.auditTrips.getById.invalidate({ id: expandedTrip }); if (prestacaoTripId) utils.auditTrips.getById.invalidate({ id: prestacaoTripId }); setShowExpense(false); setError('') },
+    onSuccess: () => { utils.auditTrips.list.invalidate(); if (prestacaoTripId) utils.auditTrips.getById.invalidate({ id: prestacaoTripId }); setShowExpense(false); setError('') },
     onError: e => setError(e.message),
   })
-  const deleteExpMut = trpc.auditCost.deleteExpense.useMutation({ onSuccess: () => { if (expandedTrip) utils.auditTrips.getById.invalidate({ id: expandedTrip }); utils.auditTrips.list.invalidate() } })
 
   function setE(k: string, v: string) { setExpForm(f => ({ ...f, [k]: v })) }
 
-  const trips = data?.trips ?? []
+  const trips = (data?.trips ?? []).filter((t: any) => t.status !== 'CLOSED')
+
+  // Agrupa viagens por cidade + período (a mesma viagem gera 1 registro por colaborador)
+  const groups: any[] = Object.values(
+    trips.reduce((acc: Record<string, any>, t: any) => {
+      const key = `${t.city ?? ''}|${t.state ?? ''}|${new Date(t.startDate).toISOString().slice(0, 10)}|${new Date(t.endDate).toISOString().slice(0, 10)}|${t.stores ?? ''}`
+      if (!acc[key]) acc[key] = { key, city: t.city, state: t.state, stores: t.stores, reason: t.reason, startDate: t.startDate, endDate: t.endDate, trips: [] }
+      acc[key].trips.push(t)
+      return acc
+    }, {})
+  )
 
   return (
     <>
@@ -827,69 +1086,58 @@ function AbaViagens() {
           <EmptyState icon="✈️" title="Nenhuma viagem" description='Clique em "+ Nova Viagem" para cadastrar.' />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {trips.map((t: any) => {
-              const spentAmount = Number(t.spentAmount ?? 0)
-              const advancedAmount = Number(t.advancedAmount ?? 0)
-              const returnedAmount = Number(t.returnedAmount ?? 0)
-              const expectedReturn = Math.max(0, advancedAmount - spentAmount)
-              const settled = returnedAmount > 0 && Math.abs(returnedAmount - expectedReturn) < 0.01
-              const isOver = spentAmount > Number(t.releasedAmount ?? 0)
-              const isExpanded = expandedTrip === t.id
-              const pct = Number(t.releasedAmount) > 0 ? Math.min(100, (spentAmount / Number(t.releasedAmount)) * 100) : 0
-              let borderColor = '#e2e8f0'
-              if (settled) borderColor = '#86efac'
-              else if (isOver) borderColor = '#fecaca'
-              else if (expectedReturn > 0 && advancedAmount > 0) borderColor = '#fde68a'
+            {groups.map((g: any) => {
+              const isOpen = expandedGroup === g.key
+              const totalSpent = g.trips.reduce((s: number, t: any) => s + Number(t.spentAmount ?? 0), 0)
+              const allSubmitted = g.trips.every((t: any) => t.status === 'SUBMITTED')
               return (
-                <div key={t.id} style={{ border: `2px solid ${borderColor}`, borderRadius: '14px', overflow: 'hidden', background: settled ? '#f0fdf4' : isOver ? '#fff5f5' : 'white', transition: 'border-color 0.3s' }}>
-                  <div style={{ padding: '16px', cursor: 'pointer' }} onClick={() => setExpandedTrip(isExpanded ? null : t.id)}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                <div key={g.key} style={{ border: `2px solid ${allSubmitted ? '#fde68a' : '#e2e8f0'}`, borderRadius: '14px', overflow: 'hidden', background: 'white' }}>
+                  {/* ── Cabeçalho: cidade + período ── */}
+                  <div style={{ padding: '16px', cursor: 'pointer' }} onClick={() => setExpandedGroup(isOpen ? null : g.key)}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                       <div style={{ flex: 1, minWidth: '160px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{t.collaborator?.name ?? '—'}</span>
-                          {t.collaborator?.role && <span style={{ fontSize: '12px', color: '#64748b' }}>{t.collaborator.role}</span>}
-                          <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: t.status === 'OPEN' ? '#dbeafe' : '#f1f5f9', color: t.status === 'OPEN' ? '#1d4ed8' : '#64748b' }}>{STATUS_LABELS[t.status] ?? t.status}</span>
-                          {settled && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', background: '#dcfce7', color: '#166534' }}>✓ Liquidada</span>}
+                          <span style={{ fontSize: '17px' }}>📍</span>
+                          <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{g.city ? `${g.city}${g.state ? `/${g.state}` : ''}` : (g.stores || 'Viagem')}</span>
+                          {allSubmitted && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>Enviada</span>}
                         </div>
-                        <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{t.reason && <span>{t.reason}</span>}{t.city && <span> · {t.city}{t.state ? `/${t.state}` : ''}</span>}{t.stores && <span> · {t.stores}</span>}</div>
-                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
+                        <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📅 {formatDate(g.startDate)} → {formatDate(g.endDate)}{g.reason && <span> · {g.reason}</span>}</div>
+                        {g.stores && g.city && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{g.stores}</div>}
                       </div>
                       <div style={{ textAlign: 'right', minWidth: '130px' }}>
-                        <div style={{ fontSize: '18px', fontWeight: '800', color: isOver ? '#dc2626' : '#0f172a' }}>{formatCurrency(spentAmount)}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>de {formatCurrency(Number(t.releasedAmount ?? 0))} liberado</div>
-                        {advancedAmount > 0 && <div style={{ fontSize: '12px', color: '#64748b' }}>adiantado: {formatCurrency(advancedAmount)}</div>}
-                        {expectedReturn > 0 && !settled && <div style={{ fontSize: '12px', fontWeight: '700', color: '#d97706', marginTop: '2px' }}>↩ devolver: {formatCurrency(expectedReturn)}</div>}
-                        {settled && <div style={{ fontSize: '12px', fontWeight: '700', color: '#16a34a', marginTop: '2px' }}>✓ {formatCurrency(returnedAmount)} devolvido</div>}
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{formatCurrency(totalSpent)}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{g.trips.length} colaborador{g.trips.length !== 1 ? 'es' : ''}</div>
                       </div>
+                      <span style={{ fontSize: '14px', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
-                    {Number(t.releasedAmount) > 0 && <div style={{ marginTop: '10px', background: '#f1f5f9', borderRadius: '4px', height: '6px' }}><div style={{ background: isOver ? '#dc2626' : pct > 80 ? '#f59e0b' : '#22c55e', borderRadius: '4px', height: '6px', width: `${Math.min(100, pct)}%`, transition: 'width 0.5s' }} /></div>}
                   </div>
-                  <div style={{ padding: '0 16px 14px', display: 'flex', gap: '6px', borderTop: '1px solid #f1f5f9', paddingTop: '10px', flexWrap: 'wrap' }}>
-                    <button onClick={() => { setExpenseTripId(t.id); setExpForm(f => ({ ...f, collaboratorId: t.collaboratorId ?? '' })); setShowExpense(true) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>+ Despesa</button>
-                    <button onClick={() => setPrestacaoTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${settled ? '#86efac' : '#fde68a'}`, background: settled ? '#f0fdf4' : '#fffbeb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: settled ? '#166534' : '#92400e' }}>📊 Prestação</button>
-                    <button onClick={() => { setEditForm({ reason: t.reason ?? '', observations: t.observations ?? '', status: t.status ?? 'OPEN' }); setEditTripId(t.id); setError('') }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer' }}>Editar</button>
-                    <button onClick={() => setExpandedTrip(isExpanded ? null : t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer' }}>{isExpanded ? 'Ocultar' : 'Ver Despesas'}</button>
-                    <button onClick={() => setDeleteTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}>Excluir</button>
-                  </div>
-                  {isExpanded && (
-                    <div style={{ borderTop: '1px solid #f1f5f9', padding: '16px', background: '#f8fafc' }}>
-                      {!tripDetail?.expenses?.length ? <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px', padding: '12px' }}>Nenhuma despesa lançada</div> : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {tripDetail.expenses.map((e: any) => (
-                            <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', borderRadius: '10px', padding: '10px 14px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '8px' }}>
-                              <div style={{ flex: 1, minWidth: '140px' }}>
-                                <div style={{ fontWeight: '600', fontSize: '14px', color: '#0f172a' }}>{e.type}</div>
-                                <div style={{ fontSize: '12px', color: '#64748b' }}>{e.description || '—'}{e.storeName ? ` · ${e.storeName}` : ''}</div>
-                                <div style={{ fontSize: '11px', color: '#94a3b8' }}>{formatDate(e.date)} · {e.paymentMethod || '—'}</div>
+
+                  {/* ── Colaboradores da viagem ── */}
+                  {isOpen && (
+                    <div style={{ borderTop: '1px solid #f1f5f9', padding: '14px 16px', background: '#f8fafc', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {g.trips.map((t: any) => {
+                        const spent = Number(t.spentAmount ?? 0)
+                        const released = Number(t.releasedAmount ?? 0)
+                        const isOver = spent > released && released > 0
+                        return (
+                          <div key={t.id} onClick={() => setPrestacaoTripId(t.id)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', background: 'white', borderRadius: '10px', padding: '12px 16px', border: `1.5px solid ${t.status === 'SUBMITTED' ? '#fde68a' : '#e2e8f0'}`, cursor: 'pointer', flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: '150px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>👤 {t.collaborator?.name ?? '—'}</span>
+                                {t.collaborator?.role && <span style={{ fontSize: '12px', color: '#64748b' }}>{t.collaborator.role}</span>}
+                                <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: t.status === 'OPEN' ? '#dbeafe' : t.status === 'SUBMITTED' ? '#fef3c7' : '#f1f5f9', color: t.status === 'OPEN' ? '#1d4ed8' : t.status === 'SUBMITTED' ? '#92400e' : '#64748b' }}>{STATUS_LABELS[t.status] ?? t.status}</span>
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{formatCurrency(Number(e.value))}</span>
-                                <button onClick={() => deleteExpMut.mutate({ id: e.id })} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '11px', cursor: 'pointer', color: '#dc2626' }}>✕</button>
-                              </div>
+                              <div style={{ fontSize: '12px', color: isOver ? '#dc2626' : '#64748b', marginTop: '3px' }}>{formatCurrency(spent)} gasto{released > 0 ? ` · ${formatCurrency(released)} liberado` : ''}</div>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button onClick={e => { e.stopPropagation(); setPrestacaoTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fde68a', background: '#fffbeb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#92400e' }}>📊 Prestação</button>
+                              <button onClick={e => { e.stopPropagation(); setExpenseTripId(t.id); setExpForm(f => ({ ...f, collaboratorId: t.collaboratorId ?? '' })); setShowExpense(true) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }}>+ Despesa</button>
+                              <button onClick={e => { e.stopPropagation(); setEditForm({ reason: t.reason ?? '', observations: t.observations ?? '', status: t.status ?? 'OPEN' }); setEditTripId(t.id); setError('') }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer' }}>Editar</button>
+                              <button onClick={e => { e.stopPropagation(); setDeleteTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}>Excluir</button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -911,8 +1159,76 @@ function AbaViagens() {
   )
 }
 
+// ─── Aba: Viagens Concluídas ──────────────────────────────────────────────────
+function AbaConcluidas() {
+  const [page, setPage] = useState(1)
+  const [filterCollab, setFilterCollab] = useState('')
+  const [prestacaoTripId, setPrestacaoTripId] = useState<string | null>(null)
+
+  const { data, isLoading } = trpc.auditTrips.list.useQuery({ page, pageSize: 15, collaboratorId: filterCollab || undefined, status: 'CLOSED' })
+  const { data: collabs } = trpc.auditCollaborators.list.useQuery()
+  const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
+
+  const trips = data?.trips ?? []
+
+  return (
+    <>
+      {prestacaoTripId && prestacaoDetail && <PrestacaoModal trip={prestacaoDetail} onClose={() => setPrestacaoTripId(null)} />}
+
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px', minWidth: '200px' }}>
+          <option value="">Todos os colaboradores</option>
+          {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      <DataCard title={`Viagens Concluídas (${data?.meta?.total ?? 0})`}>
+        {isLoading ? <LoadingState /> : !trips.length ? (
+          <EmptyState icon="✅" title="Nenhuma viagem concluída" description="As viagens validadas pelo financeiro aparecem aqui." />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {trips.map((t: any) => (
+              <div key={t.id} style={{ border: '2px solid #86efac', borderRadius: '14px', overflow: 'hidden', background: '#f0fdf4' }}>
+                <div style={{ padding: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: '160px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{t.collaborator?.name ?? '—'}</span>
+                        {t.collaborator?.role && <span style={{ fontSize: '12px', color: '#64748b' }}>{t.collaborator.role}</span>}
+                        <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', background: '#dcfce7', color: '#166534' }}>✓ Concluída</span>
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{t.reason && <span>{t.reason}</span>}{t.stores && <span> · {t.stores}</span>}</div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', minWidth: '130px' }}>
+                      <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{formatCurrency(Number(t.spentAmount ?? 0))}</div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>gasto total</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: '0 16px 14px', borderTop: '1px solid #dcfce7', paddingTop: '10px' }}>
+                  <button onClick={() => setPrestacaoTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #86efac', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#166534' }}>📊 Ver Prestação</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {(data?.meta?.totalPages ?? 0) > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>Página {data!.meta.page} de {data!.meta.totalPages}</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Btn variant="outline" small disabled={!data!.meta.hasPrev} onClick={() => setPage(p => p - 1)}>← Anterior</Btn>
+              <Btn variant="outline" small disabled={!data!.meta.hasNext} onClick={() => setPage(p => p + 1)}>Próxima →</Btn>
+            </div>
+          </div>
+        )}
+      </DataCard>
+    </>
+  )
+}
+
 // ─── Página raiz com abas ─────────────────────────────────────────────────────
-type Tab = 'viagens' | 'colaboradores' | 'tipos'
+type Tab = 'viagens' | 'concluidas' | 'colaboradores' | 'tipos'
 
 export default function ViagensPage() {
   const [tab, setTab] = useState<Tab>('viagens')
@@ -921,10 +1237,12 @@ export default function ViagensPage() {
     <ModulePage title="Custo de Auditoria — Viagens" description="Gerencie colaboradores, tipos de custo e cadastre viagens com prestação de contas">
       <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '14px', width: 'fit-content' }}>
         <button style={tabStyle(tab === 'viagens')} onClick={() => setTab('viagens')}>✈️ Viagens</button>
+        <button style={tabStyle(tab === 'concluidas')} onClick={() => setTab('concluidas')}>✅ Concluídas</button>
         <button style={tabStyle(tab === 'colaboradores')} onClick={() => setTab('colaboradores')}>👥 Colaboradores</button>
         <button style={tabStyle(tab === 'tipos')} onClick={() => setTab('tipos')}>🏷️ Tipos de Custo</button>
       </div>
       {tab === 'viagens' && <AbaViagens />}
+      {tab === 'concluidas' && <AbaConcluidas />}
       {tab === 'colaboradores' && <AbaColaboradores />}
       {tab === 'tipos' && <AbaTiposCusto />}
     </ModulePage>

@@ -2,13 +2,83 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, EmptyState } from '@/components/shared/module-page'
 import { formatCurrency } from '@/lib/utils'
 
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
+
+// ── Multi-select dropdown ─────────────────────────────────────────────────────
+function MultiSelectDropdown({ options, selected, onChange, placeholder }: {
+  options: { value: string; label: string }[]
+  selected: string[]
+  onChange: (v: string[]) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  const toggle = (v: string) =>
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+
+  const label = selected.length === 0
+    ? placeholder
+    : selected.length === options.length
+      ? 'Todos'
+      : selected.length === 1
+        ? (options.find(o => o.value === selected[0])?.label ?? '1 selecionado')
+        : `${selected.length} selecionados`
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {open && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+          onClick={() => setOpen(false)}
+        />
+      )}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minWidth: '160px', justifyContent: 'space-between', position: 'relative', zIndex: 200 }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (
+        <div
+          style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: '200px', padding: '8px 0 0', maxHeight: '300px', overflowY: 'auto' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', gap: '6px', padding: '4px 10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+            <button onClick={() => onChange(options.map(o => o.value))} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer' }}>Todos</button>
+            <button onClick={() => onChange([])} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer' }}>Limpar</button>
+          </div>
+          {options.map(opt => {
+            const checked = selected.includes(opt.value)
+            return (
+              <div
+                key={opt.value}
+                onClick={() => toggle(opt.value)}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#374151', background: checked ? '#eff6ff' : 'transparent' }}
+                onMouseEnter={e => { if (!checked) e.currentTarget.style.background = '#f8fafc' }}
+                onMouseLeave={e => { e.currentTarget.style.background = checked ? '#eff6ff' : 'transparent' }}
+              >
+                <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${checked ? '#3b82f6' : '#d1d5db'}`, background: checked ? '#3b82f6' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                  {checked && <span style={{ color: 'white', fontSize: '11px', fontWeight: 'bold', lineHeight: 1 }}>✓</span>}
+                </div>
+                <span>{opt.label}</span>
+              </div>
+            )
+          })}
+          <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '8px 10px', textAlign: 'right' }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '8px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── Componentes de apresentação ───────────────────────────────────────────────
 function KpiCard({ label, value, sub, icon, color }: { label: string; value: string; sub?: string; icon: string; color?: string }) {
@@ -44,16 +114,6 @@ function Bar({ label, value, max, color = '#3b82f6', badge }: { label: string; v
   )
 }
 
-// ── Cálculo de dias num intervalo (inclusive em ambas as pontas) ──────────────
-function calcTripDays(startDate: any, endDate: any): number {
-  if (!startDate || !endDate) return 1
-  const s = new Date(startDate)
-  const e = new Date(endDate)
-  if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1
-  const days = Math.round((e.getTime() - s.getTime()) / 86400000) + 1
-  return Math.max(1, days)
-}
-
 // ── Verifica se uma viagem sobrepõe o mês/ano filtrado ───────────────────────
 function tripInPeriod(trip: any, year: number, month: number): boolean {
   if (!trip.startDate) return false
@@ -64,42 +124,74 @@ function tripInPeriod(trip: any, year: number, month: number): boolean {
   return s <= periodEnd && e >= periodStart
 }
 
-export default function AuditDashboardPage() {
-  const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
-  const [filterCollab, setFilterCollab] = useState('')
+function tripInAnyPeriod(trip: any, periods: string[]): boolean {
+  if (periods.length === 0) return false
+  return periods.some(pk => {
+    const [y, m] = pk.split('-').map(Number)
+    return tripInPeriod(trip, y, m)
+  })
+}
 
-  // Queries — trips com pageSize alto para cálculos client-side
-  const { data: tripsData } = trpc.auditTrips.list.useQuery({ pageSize: 500, collaboratorId: filterCollab || undefined })
+export default function AuditDashboardPage() {
+  const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
+  const [selectedCollabs, setSelectedCollabs] = useState<string[]>([])
+
+  const { data: availablePeriods } = trpc.auditTrips.listAvailablePeriods.useQuery()
+
+  // Auto-seleciona o período mais recente
+  useEffect(() => {
+    if (availablePeriods?.length && selectedPeriods.length === 0) {
+      setSelectedPeriods([`${availablePeriods[0].year}-${availablePeriods[0].month}`])
+    }
+  }, [availablePeriods, selectedPeriods.length])
+
+  const periodOptions = useMemo(
+    () => (availablePeriods ?? []).map(p => ({ value: `${p.year}-${p.month}`, label: p.label })),
+    [availablePeriods]
+  )
+
+  const { data: tripsData } = trpc.auditTrips.list.useQuery(
+    { pageSize: 500 },
+    { enabled: selectedPeriods.length > 0 }
+  )
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: expenses } = trpc.auditCost.listExpenses.useQuery({ pageSize: 500 })
 
-  // ── Viagens do período ───────────────────────────────────────────────────────
-  const tripsAll = tripsData?.trips ?? []
-  const tripsInPeriod = useMemo(
-    () => tripsAll.filter((t: any) => tripInPeriod(t, year, month)),
-    [tripsAll, year, month]
+  const collabOptions = useMemo(
+    () => ((collabs as any[]) ?? []).map((c: any) => ({ value: c.id, label: c.name })),
+    [collabs]
   )
 
-  // ── Despesas do período ──────────────────────────────────────────────────────
+  // ── Viagens do período (com filtro de colaborador) ───────────────────────────
+  const tripsAll = tripsData?.trips ?? []
+  const tripsInPeriod = useMemo(() => {
+    const byPeriod = tripsAll.filter((t: any) => tripInAnyPeriod(t, selectedPeriods))
+    if (selectedCollabs.length === 0) return byPeriod
+    return byPeriod.filter((t: any) => selectedCollabs.includes(t.collaboratorId))
+  }, [tripsAll, selectedPeriods, selectedCollabs])
+
+  // ── Despesas do período (com filtro de colaborador) ──────────────────────────
   const monthExpenses = useMemo(() => {
-    if (!expenses?.expenses) return []
+    if (!expenses?.expenses || selectedPeriods.length === 0) return []
     return expenses.expenses.filter((e: any) => {
       const d = new Date(e.date)
-      return d.getFullYear() === year && d.getMonth() + 1 === month &&
-        (!filterCollab || e.collaboratorId === filterCollab || e.auditorId === filterCollab)
+      const inPeriod = selectedPeriods.some(pk => {
+        const [y, m] = pk.split('-').map(Number)
+        return d.getFullYear() === y && d.getMonth() + 1 === m
+      })
+      const inCollab = selectedCollabs.length === 0 ||
+        selectedCollabs.includes(e.collaboratorId) ||
+        selectedCollabs.includes(e.auditorId)
+      return inPeriod && inCollab
     })
-  }, [expenses, year, month, filterCollab])
+  }, [expenses, selectedPeriods, selectedCollabs])
 
-  // ── KPIs principais ──────────────────────────────────────────────────────────
+  // ── KPIs ─────────────────────────────────────────────────────────────────────
   const totalMonthExpenses = useMemo(
     () => monthExpenses.reduce((s: number, e: any) => s + Number(e.value), 0),
     [monthExpenses]
   )
 
-  // Dias únicos em viagem — datas distintas cobertas por qualquer viagem no período
-  // Se dois colaboradores viajam no mesmo dia, conta como 1 dia
   const totalDaysInTravel = useMemo(() => {
     const uniqueDays = new Set<string>()
     for (const t of tripsInPeriod) {
@@ -116,13 +208,6 @@ export default function AuditDashboardPage() {
     return uniqueDays.size
   }, [tripsInPeriod])
 
-  // Total liberado e colaboradores únicos
-  const totalReleased = useMemo(
-    () => tripsInPeriod.reduce((s: number, t: any) => s + Number(t.releasedAmount ?? 0), 0),
-    [tripsInPeriod]
-  )
-
-  // Colaboradores com despesas no período
   const uniqueCollabsInPeriod = useMemo(() => {
     const ids = new Set<string>()
     for (const e of monthExpenses) { if (e.collaboratorId) ids.add(e.collaboratorId) }
@@ -130,7 +215,6 @@ export default function AuditDashboardPage() {
     return ids.size
   }, [monthExpenses, tripsInPeriod])
 
-  // Lojas únicas inventariadas (pela store nas despesas + nas viagens)
   const uniqueStores = useMemo(() => {
     const names = new Set<string>()
     for (const e of monthExpenses) { if (e.storeName) names.add(e.storeName) }
@@ -140,20 +224,15 @@ export default function AuditDashboardPage() {
     return names.size
   }, [monthExpenses, tripsInPeriod])
 
-  // Total de inventários = soma de todas as lojas em todas as viagens do período
-  // Cada loja numa viagem conta como 1 inventário, inclusive repetições entre viagens
   const totalInventories = useMemo(() =>
     tripsInPeriod.reduce((sum: number, t: any) => {
-      if (!t.stores) return sum + 1  // viagem sem loja cadastrada conta como 1
+      if (!t.stores) return sum + 1
       const stores = t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)
       return sum + (stores.length || 1)
     }, 0)
   , [tripsInPeriod])
 
-  // Custo médio por inventário
   const avgPerInventory = totalInventories > 0 ? totalMonthExpenses / totalInventories : 0
-
-  // Custo médio por colaborador ativo no período
   const avgPerCollab = uniqueCollabsInPeriod > 0 ? totalMonthExpenses / uniqueCollabsInPeriod : 0
 
   // ── Agrupamentos para gráficos ───────────────────────────────────────────────
@@ -166,7 +245,6 @@ export default function AuditDashboardPage() {
       const prev = map.get(key) ?? { name, total: 0, days: 0 }
       map.set(key, { ...prev, total: prev.total + Number(e.value) })
     }
-    // Dias únicos por colaborador (datas distintas nas viagens daquele colaborador)
     const daysPerCollab = new Map<string, Set<string>>()
     for (const t of tripsInPeriod) {
       if (!t.collaboratorId || !t.startDate) continue
@@ -201,7 +279,6 @@ export default function AuditDashboardPage() {
     return Array.from(map.entries()).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value)
   }, [monthExpenses])
 
-  // Por loja: gasto + contagem de inventários (viagens que passaram pela loja)
   const byStore = useMemo(() => {
     const map = new Map<string, { spent: number; inventories: number }>()
     for (const e of monthExpenses) {
@@ -235,36 +312,33 @@ export default function AuditDashboardPage() {
     >
       {/* Filtros */}
       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <select value={month} onChange={e => setMonth(Number(e.target.value))}
-          style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px' }}>
-          {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-        </select>
-        <select value={year} onChange={e => setYear(Number(e.target.value))}
-          style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px' }}>
-          {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select value={filterCollab} onChange={e => setFilterCollab(e.target.value)}
-          style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '14px', minWidth: '180px' }}>
-          <option value="">Todos os colaboradores</option>
-          {((collabs as any[]) ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <MultiSelectDropdown
+          options={periodOptions}
+          selected={selectedPeriods}
+          onChange={setSelectedPeriods}
+          placeholder="Selecionar período"
+        />
+        <MultiSelectDropdown
+          options={collabOptions}
+          selected={selectedCollabs}
+          onChange={setSelectedCollabs}
+          placeholder="Todos os colaboradores"
+        />
       </div>
 
-      {/* KPIs — 8 cards, 4 por linha em telas largas */}
+      {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-        <KpiCard icon="💰" label="Total do Mês"           value={formatCurrency(totalMonthExpenses)} />
-        <KpiCard icon="📅" label="Dias em Viagem"         value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
-        <KpiCard icon="👥" label="Colaboradores"          value={String(uniqueCollabsInPeriod)} sub="no período" />
-        <KpiCard icon="🟢" label="Total Liberado"         value={formatCurrency(totalReleased)} />
-        <KpiCard icon="🏪" label="Lojas Inventariadas"    value={String(uniqueStores)} sub="lojas únicas" />
-        <KpiCard icon="📋" label="Inventários Realizados" value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
+        <KpiCard icon="💰" label="Total do Mês"             value={formatCurrency(totalMonthExpenses)} />
+        <KpiCard icon="📅" label="Dias em Viagem"           value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
+        <KpiCard icon="👥" label="Colaboradores"            value={String(uniqueCollabsInPeriod)} sub="no período" />
+        <KpiCard icon="🏪" label="Lojas Inventariadas"      value={String(uniqueStores)} sub="lojas únicas" />
+        <KpiCard icon="📋" label="Inventários Realizados"   value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
         <KpiCard icon="📊" label="Custo Médio / Inventário" value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
         <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
 
-        {/* Gastos por Colaborador (com dias em viagem) */}
         <DataCard title="Gastos por Colaborador">
           {!byCollaborator.length
             ? <EmptyState icon="👥" title="Sem dados" description="Nenhuma despesa no período." />
@@ -276,7 +350,6 @@ export default function AuditDashboardPage() {
           }
         </DataCard>
 
-        {/* Gastos por Centro de Custo */}
         <DataCard title="Gastos por Centro de Custo">
           {!byCostCenter.length
             ? <EmptyState icon="📂" title="Sem dados" description="Nenhuma despesa no período." />
@@ -286,7 +359,6 @@ export default function AuditDashboardPage() {
           }
         </DataCard>
 
-        {/* Por Forma de Pagamento */}
         <DataCard title="Por Forma de Pagamento">
           {!byPayment.length
             ? <EmptyState icon="💳" title="Sem dados" description="Nenhuma despesa no período." />
@@ -296,7 +368,6 @@ export default function AuditDashboardPage() {
           }
         </DataCard>
 
-        {/* Lojas: gasto + inventários */}
         <DataCard title="Gastos e Inventários por Loja (Top 10)">
           {!byStore.length
             ? <EmptyState icon="🏪" title="Sem dados" description="Nenhuma despesa ou visita com loja no período." />
@@ -315,45 +386,6 @@ export default function AuditDashboardPage() {
           }
         </DataCard>
 
-        {/* Orçamento por viagem */}
-        <DataCard title="Orçamento: Liberado vs Gasto por Viagem">
-          {!tripsInPeriod.length
-            ? <EmptyState icon="📉" title="Sem viagens" description="Nenhuma viagem no período selecionado." />
-            : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {tripsInPeriod.slice(0, 8).map((t: any) => {
-                  const spent = Number(t.spentAmount ?? 0)
-                  const released = Number(t.releasedAmount ?? 0)
-                  const pct = released > 0 ? Math.min(100, (spent / released) * 100) : 0
-                  const over = spent > released
-                  const days = calcTripDays(t.startDate, t.endDate)
-                  return (
-                    <div key={t.id}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: '600', color: '#374151' }}>{t.collaborator?.name ?? '—'}</span>
-                          <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>{days}d</span>
-                        </div>
-                        <span style={{ fontSize: '12px', color: over ? '#dc2626' : '#16a34a', fontWeight: '700' }}>
-                          {formatCurrency(spent)} / {formatCurrency(released)}
-                        </span>
-                      </div>
-                      <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '8px' }}>
-                        <div style={{ background: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e', borderRadius: '6px', height: '8px', width: `${Math.min(100, pct)}%` }} />
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                        {t.reason && <span>{t.reason}</span>}
-                        {t.stores && <span> · {t.stores}</span>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          }
-        </DataCard>
-
-        {/* Dias em viagem por colaborador (dias únicos — datas repetidas não somam) */}
         <DataCard title="Dias em Viagem por Colaborador">
           {!tripsInPeriod.length
             ? <EmptyState icon="📅" title="Sem viagens" description="Nenhuma viagem no período." />

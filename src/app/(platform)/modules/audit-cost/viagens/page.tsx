@@ -643,9 +643,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const gastoExp    = allExpenses.filter((e: any) => e.subtype === 'gasto')
 
   const utils = trpc.useUtils()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const pendingSaveRef = useRef<{ key: string; idx: number } | null>(null)
-  const attachingIdRef = useRef<string | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const [attachments, setAttachments] = useState<Record<string, string>>(() => {
@@ -677,9 +675,9 @@ function TabelaVerificacao({ trip }: { trip: any }) {
     onSuccess: () => utils.auditTrips.getById.invalidate({ id: trip.id }),
   })
 
-  function saveAttachment(id: string, url?: string) {
-    setSavingAttach(id)
-    setAttachMut.mutate({ id, attachmentUrl: (url ?? attachments[id]) || undefined })
+  function saveAttachment(expId: string, url: string) {
+    setSavingAttach(expId)
+    setAttachMut.mutate({ id: expId, attachmentUrl: url || undefined })
   }
   function saveNewRow(date: string, type: string, idx: number) {
     const key = `${date}|${type}`
@@ -700,21 +698,6 @@ function TabelaVerificacao({ trip }: { trip: any }) {
       value: parseMoney(row.value),
     })
   }
-  function handleFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
-    const file = ev.target.files?.[0]
-    const id = attachingIdRef.current
-    if (!file || !id) return
-    const reader = new FileReader()
-    reader.onload = e => {
-      const url = e.target?.result as string
-      setAttachments(a => ({ ...a, [id]: url }))
-      saveAttachment(id, url)
-      attachingIdRef.current = null
-    }
-    reader.readAsDataURL(file)
-    ev.target.value = ''
-  }
-
   // Build date maps
   const byDateOrig: Record<string, any[]> = {}
   for (const e of originalExp) {
@@ -737,7 +720,6 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <input ref={fileInputRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFileChange} />
       {lightboxUrl && (
         <div
           onClick={() => setLightboxUrl(null)}
@@ -812,17 +794,38 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                   {/* ── Lançamentos deste centro de custo ── */}
                   <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0', background: matched ? '#f0fdf4' : 'transparent' }}>
                     {typeGastos.map((e: any) => {
-                      const attachUrl = attachments[e.id] || e.attachmentUrl || ''
+                      const expId = e.id as string
+                      const attachUrl = attachments[expId] || e.attachmentUrl || ''
                       const hasAttach = !!attachUrl
                       const isImg = hasAttach && attachUrl.startsWith('data:image')
+                      const fileInputId = `file-exp-${expId}`
                       return (
-                        <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                        <div key={expId} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            id={fileInputId}
+                            style={{ display: 'none' }}
+                            onChange={(ev) => {
+                              const file = ev.target.files?.[0]
+                              if (!file) return
+                              const reader = new FileReader()
+                              reader.onload = re => {
+                                const url = re.target?.result as string
+                                setAttachments(a => ({ ...a, [expId]: url }))
+                                saveAttachment(expId, url)
+                              }
+                              reader.readAsDataURL(file)
+                              ev.target.value = ''
+                            }}
+                          />
                           <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
                             R$ {Number(e.value).toFixed(2).replace('.', ',')}
                           </span>
-                          <button onClick={() => { attachingIdRef.current = e.id; fileInputRef.current?.click() }}
+                          <button
+                            onClick={() => { (document.getElementById(fileInputId) as HTMLInputElement)?.click() }}
                             style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#fecaca'}`, background: hasAttach ? '#22c55e' : '#fef2f2', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#dc2626', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
+                            {savingAttach === expId ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
                           </button>
                           {isImg && (
                             <img
@@ -832,7 +835,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                             />
                           )}
                           {hasAttach && !isImg && <a href={attachUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#2563eb' }}>Ver ↗</a>}
-                          <button onClick={() => deleteExpMut.mutate({ id: e.id })}
+                          <button onClick={() => deleteExpMut.mutate({ id: expId })}
                             title="Excluir lançamento"
                             style={{ padding: '2px 6px', borderRadius: '5px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
                         </div>

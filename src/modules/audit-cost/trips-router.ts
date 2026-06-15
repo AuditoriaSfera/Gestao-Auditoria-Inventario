@@ -71,7 +71,7 @@ export const auditTripsRouter = createTRPCRouter({
         where: { id: input.id },
         include: {
           collaborator: true,
-          expenses: { where: { deletedAt: null }, orderBy: { date: 'desc' } },
+          expenses: { where: { deletedAt: null }, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }] },
           formLinks: { where: { deletedAt: null }, include: { response: true } },
         },
       })

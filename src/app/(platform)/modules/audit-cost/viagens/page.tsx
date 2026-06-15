@@ -479,16 +479,6 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
                       .map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
                   </select>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: '600', color: '#374151', whiteSpace: 'nowrap' }}>Adiantamento R$</label>
-                  <input
-                    value={entry.advancedAmount}
-                    onChange={e => updateCollab(entry.id, 'advancedAmount', e.target.value)}
-                    placeholder="0,00"
-                    inputMode="decimal"
-                    style={{ ...inpSm, width: '90px', textAlign: 'right' }}
-                  />
-                </div>
                 {totalDiarias > 0 && (
                   <span style={{ fontSize: '12px', fontWeight: '700', color: '#1e40af', background: '#eff6ff', padding: '3px 10px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
                     Total: {formatCurrency(totalDiarias)}
@@ -655,7 +645,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const utils = trpc.useUtils()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pendingSaveRef = useRef<{ key: string; idx: number } | null>(null)
-  const [attachingId, setAttachingId] = useState<string | null>(null)
+  const attachingIdRef = useRef<string | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const [attachments, setAttachments] = useState<Record<string, string>>(() => {
@@ -712,13 +702,14 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   }
   function handleFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0]
-    if (!file || !attachingId) return
+    const id = attachingIdRef.current
+    if (!file || !id) return
     const reader = new FileReader()
     reader.onload = e => {
       const url = e.target?.result as string
-      setAttachments(a => ({ ...a, [attachingId]: url }))
-      saveAttachment(attachingId, url)
-      setAttachingId(null)
+      setAttachments(a => ({ ...a, [id]: url }))
+      saveAttachment(id, url)
+      attachingIdRef.current = null
     }
     reader.readAsDataURL(file)
     ev.target.value = ''
@@ -829,7 +820,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                           <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
                             R$ {Number(e.value).toFixed(2).replace('.', ',')}
                           </span>
-                          <button onClick={() => { setAttachingId(e.id); fileInputRef.current?.click() }}
+                          <button onClick={() => { attachingIdRef.current = e.id; fileInputRef.current?.click() }}
                             style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#fecaca'}`, background: hasAttach ? '#22c55e' : '#fef2f2', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#dc2626', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {savingAttach === e.id ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
                           </button>

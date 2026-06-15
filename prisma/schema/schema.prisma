@@ -391,6 +391,7 @@ model Store {
 
   // Módulos
   cdeRecords          CdeDailyRecord[]
+  cdeLines            CdeLine[]
   noteTransits        NoteTransit[]
   writeOffs           WriteOff[]
   conferences         MerchandiseConference[]
@@ -961,6 +962,93 @@ model CdeMovement {
   @@index([recordId])
   @@index([noteNumber])
   @@map("cde_movements")
+}
+
+// ------------------------------------------------------------
+// CDE — CONFRONTO DIÁRIO DE ESTOQUE (módulo reconstruído)
+// Modelo orientado a LINHAS de movimentação importadas da planilha,
+// agrupadas por Documento, com 3 camadas de classificação,
+// validação por documento/linha, status oficiais e SLA de 24h.
+// ------------------------------------------------------------
+
+model CdeLine {
+  id              String   @id @default(cuid())
+  importBatchId   String
+  storeId         String
+  date            DateTime @db.Date // data de referência (data da importação)
+
+  // Camada 1 — movimento bruto importado (colunas originais da planilha)
+  loja            String?
+  movimentacao    String?  // "Movimentação" (nome bruto)
+  local           String?
+  lancamento      String?  // "Lançamento"
+  movimento       String?  // "Movimento"
+  cod             String?  // "Cod."
+  descricao       String?  // "Descrição"
+  documento       String   // "Documento" — referência principal de rastreio
+  complemento     String?
+  saldoAnterior   Decimal? @db.Decimal(15, 4)
+  qtdMovimento    Decimal  @db.Decimal(15, 4) // coluna K — define a natureza
+  saldoAtual      Decimal? @db.Decimal(15, 4)
+
+  // Camada 2 — natureza da movimentação (derivada de qtdMovimento)
+  nature          String   // ENTRADA (>0), SAIDA (<0), NEUTRA (=0)
+
+  // Camada 3 — categoria gerencial CDE
+  category        String   // ENTRADA_NF, ENTRADA_TRANSF, PECAS_VENDIDAS, SAIDAS_TRANSF, OUTRAS_SAIDAS, TROCAS, PENDENTE_PARAM
+  categoryRuleId  String?  // regra que classificou (null = padrão embutido ou manual)
+  categoryManual  Boolean  @default(false) // reclassificada manualmente por administrador
+
+  // Validação / status oficiais
+  status          String   @default("PENDING_VALIDATION")
+  // PENDING_VALIDATION | CORRECT | INCORRECT | REGULARIZED | PENDING_PARAM
+  validationAction String? // CORRECT | INCORRECT | FORWARDED_AUDIT
+  validationReason String?  @db.Text
+  attachmentRef    String?  @db.Text // evidência anexada (obrigatória ao encaminhar p/ auditoria)
+  forwardedToAudit Boolean  @default(false)
+  validatedById   String?
+  validatedAt     DateTime?
+
+  // Regularização (tratativa de itens incorretos)
+  regularizedById String?
+  regularizedAt   DateTime?
+  regularizationNote String? @db.Text
+
+  store           Store    @relation(fields: [storeId], references: [id])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+  createdBy       String?
+  updatedBy       String?
+
+  @@index([storeId, date])
+  @@index([documento])
+  @@index([status])
+  @@index([category])
+  @@index([importBatchId])
+  @@map("cde_lines")
+}
+
+model CdeClassificationRule {
+  id           String   @id @default(cuid())
+  priority     Int      @default(100) // menor = avaliada primeiro
+  field        String   @default("movimentacao") // movimentacao | movimento | descricao | lancamento
+  matchType    String   @default("CONTAINS") // EQUALS | CONTAINS | STARTS_WITH | REGEX
+  pattern      String
+  natureFilter String?  // ENTRADA | SAIDA | NEUTRA (opcional)
+  category     String   // categoria gerencial alvo
+  isActive     Boolean  @default(true)
+  description  String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+  createdBy    String?
+  updatedBy    String?
+
+  @@index([isActive, priority])
+  @@map("cde_classification_rules")
 }
 
 // ============================================================

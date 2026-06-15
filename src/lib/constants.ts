@@ -26,7 +26,7 @@ export const MODULES = {
 } as const
 
 export const MODULE_LABELS: Record<string, string> = {
-  'cde': 'CDE / Controle de Estoque',
+  'cde': 'CDE — Confronto Diário de Estoque',
   'note-transit': 'Trânsito de Notas',
   'write-offs': 'Baixas e Perdas',
   'merchandise': 'Conferência de Mercadoria',

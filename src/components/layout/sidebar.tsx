@@ -56,6 +56,14 @@ const navItems: NavItem[] = [
     href: '/modules/cde',
     label: MODULE_LABELS['cde']!,
     icon: ClipboardList,
+    children: [
+      { href: '/modules/cde', label: 'Painel' },
+      { href: '/modules/cde/importacao', label: 'Importação' },
+      { href: '/modules/cde/validacao', label: 'Validação' },
+      { href: '/modules/cde/pendencias', label: 'Pendências' },
+      { href: '/modules/cde/historico', label: 'Histórico' },
+      { href: '/modules/cde/parametrizacao', label: 'Parametrização' },
+    ],
   },
   {
     href: '/modules/note-transit',

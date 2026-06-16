@@ -1779,12 +1779,12 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   const [form, setForm] = useState({
     costCenterName: '',
     date: today,
-    storeName: '',
     reason: '',
-    collaboratorId: '',
     value: '',
     paymentMethod: '',
   })
+  const [selectedCollabIds, setSelectedCollabIds] = useState<string[]>([])
+  const [selectedStoreNames, setSelectedStoreNames] = useState<string[]>([])
   const [attachments, setAttachments] = useState<string[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -1792,6 +1792,8 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   const createMut = trpc.auditInformativeCosts.create.useMutation()
 
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
+
+  const storeOptions = storesList.map((s: any) => (s.code ? `[${s.code}] ${s.name}` : s.name))
 
   function handleFiles(ev: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(ev.target.files ?? [])
@@ -1814,9 +1816,10 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
       await createMut.mutateAsync({
         costCenterName:  form.costCenterName,
         date:            new Date(form.date + 'T12:00:00'),
-        storeName:       form.storeName || undefined,
+        storeName:       selectedStoreNames.length ? selectedStoreNames.join(', ') : undefined,
         reason:          form.reason || undefined,
-        collaboratorId:  form.collaboratorId || undefined,
+        collaboratorId:  selectedCollabIds[0] || undefined,
+        collaboratorIds: selectedCollabIds.length ? selectedCollabIds : undefined,
         value:           Number(form.value.replace(',', '.')),
         paymentMethod:   form.paymentMethod || undefined,
         attachmentUrls:  attachments.length ? attachments : undefined,
@@ -1861,18 +1864,20 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
         </Field>
       </div>
 
-      <Field label="Colaborador">
-        <select style={inp} value={form.collaboratorId} onChange={e => set('collaboratorId', e.target.value)}>
-          <option value="">— Selecione (opcional)</option>
-          {collabsList.map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
-        </select>
+      <Field label="Colaborador" hint="Pode selecionar mais de um">
+        <CollabMultiSelect
+          collabs={collabsList}
+          selectedIds={selectedCollabIds}
+          onChange={setSelectedCollabIds}
+        />
       </Field>
 
-      <Field label="Loja">
-        <select style={inp} value={form.storeName} onChange={e => set('storeName', e.target.value)}>
-          <option value="">— Selecione (opcional)</option>
-          {storesList.map((s: any) => <option key={s.id} value={s.name}>{s.code ? `[${s.code}] ` : ''}{s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
-        </select>
+      <Field label="Loja" hint="Pode selecionar mais de uma">
+        <LojasDoDiaSelect
+          options={storeOptions}
+          selected={selectedStoreNames}
+          onChange={setSelectedStoreNames}
+        />
       </Field>
 
       <Field label="Motivo">

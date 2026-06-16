@@ -45,24 +45,28 @@ export const auditInformativeCostsRouter = createTRPCRouter({
 
   create: protectedProcedure
     .input(z.object({
-      tripId:        z.string().optional(),
-      costCenterName: z.string().min(1),
-      date:          z.date(),
-      storeName:     z.string().optional(),
-      reason:        z.string().optional(),
-      collaboratorId: z.string().optional(),
-      value:          z.number().min(0),
-      paymentMethod:  z.string().optional(),
-      attachmentUrls: z.array(z.string()).optional(),
+      tripId:          z.string().optional(),
+      costCenterName:  z.string().min(1),
+      date:            z.date(),
+      storeName:       z.string().optional(),
+      reason:          z.string().optional(),
+      collaboratorId:  z.string().optional(),
+      collaboratorIds: z.array(z.string()).optional(),
+      value:           z.number().min(0),
+      paymentMethod:   z.string().optional(),
+      attachmentUrls:  z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { attachmentUrls, ...rest } = input
+      const { attachmentUrls, collaboratorIds, collaboratorId, ...rest } = input
+      const primaryCollabId = collaboratorId || collaboratorIds?.[0] || undefined
       return ctx.db.auditInformativeCost.create({
         data: {
           ...rest,
-          attachmentUrls: attachmentUrls?.length ? JSON.stringify(attachmentUrls) : null,
-          auditorId: ctx.session.user.id,
-          createdBy: ctx.session.user.id,
+          collaboratorId:  primaryCollabId,
+          collaboratorIds: collaboratorIds?.length ? JSON.stringify(collaboratorIds) : null,
+          attachmentUrls:  attachmentUrls?.length ? JSON.stringify(attachmentUrls) : null,
+          auditorId:  ctx.session.user.id,
+          createdBy:  ctx.session.user.id,
         },
       })
     }),

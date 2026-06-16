@@ -1452,18 +1452,19 @@ model AuditFormResponse {
 }
 
 model AuditInformativeCost {
-  id             String   @id @default(cuid())
-  auditorId      String
-  tripId         String?
-  costCenterName String
-  date           DateTime @db.Date
-  storeName      String?
-  reason         String?  @db.Text
-  collaboratorId String?
-  value          Decimal  @db.Decimal(15, 4)
-  paymentMethod  String?
-  attachmentUrls String?  @db.Text
-  createdBy      String?
+  id              String   @id @default(cuid())
+  auditorId       String
+  tripId          String?
+  costCenterName  String
+  date            DateTime @db.Date
+  storeName       String?
+  reason          String?  @db.Text
+  collaboratorId  String?
+  collaboratorIds String?  @db.Text
+  value           Decimal  @db.Decimal(15, 4)
+  paymentMethod   String?
+  attachmentUrls  String?  @db.Text
+  createdBy       String?
 
   trip         AuditTrip?         @relation(fields: [tripId], references: [id])
   collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])

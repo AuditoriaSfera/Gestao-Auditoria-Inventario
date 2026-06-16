@@ -798,34 +798,36 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                       const attachUrl = attachments[expId] || e.attachmentUrl || ''
                       const hasAttach = !!attachUrl
                       const isImg = hasAttach && attachUrl.startsWith('data:image')
-                      const fileInputId = `file-exp-${expId}`
+                      const fileInputId   = `file-exp-${expId}`
+                      const cameraInputId = `cam-exp-${expId}`
+                      const handleExpFile = (ev: React.ChangeEvent<HTMLInputElement>) => {
+                        const file = ev.target.files?.[0]
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = re => {
+                          const url = re.target?.result as string
+                          setAttachments(a => ({ ...a, [expId]: url }))
+                          saveAttachment(expId, url)
+                        }
+                        reader.readAsDataURL(file)
+                        ev.target.value = ''
+                      }
                       return (
                         <div key={expId} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
-                          <input
-                            type="file"
-                            accept="image/*,application/pdf"
-                            id={fileInputId}
-                            style={{ display: 'none' }}
-                            onChange={(ev) => {
-                              const file = ev.target.files?.[0]
-                              if (!file) return
-                              const reader = new FileReader()
-                              reader.onload = re => {
-                                const url = re.target?.result as string
-                                setAttachments(a => ({ ...a, [expId]: url }))
-                                saveAttachment(expId, url)
-                              }
-                              reader.readAsDataURL(file)
-                              ev.target.value = ''
-                            }}
-                          />
+                          <input type="file" accept="image/*,application/pdf" id={fileInputId} style={{ display: 'none' }} onChange={handleExpFile} />
+                          <input type="file" accept="image/*" capture="environment" id={cameraInputId} style={{ display: 'none' }} onChange={handleExpFile} />
                           <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
                             R$ {Number(e.value).toFixed(2).replace('.', ',')}
                           </span>
                           <button
                             onClick={() => { (document.getElementById(fileInputId) as HTMLInputElement)?.click() }}
                             style={{ padding: '3px 9px', borderRadius: '6px', border: `1.5px solid ${hasAttach ? '#16a34a' : '#fecaca'}`, background: hasAttach ? '#22c55e' : '#fef2f2', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: hasAttach ? 'white' : '#dc2626', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            {savingAttach === expId ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Comprovante'}
+                            {savingAttach === expId ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Arquivo'}
+                          </button>
+                          <button
+                            onClick={() => { (document.getElementById(cameraInputId) as HTMLInputElement)?.click() }}
+                            style={{ padding: '3px 9px', borderRadius: '6px', border: '1.5px solid #a5b4fc', background: '#f5f3ff', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: '#4f46e5', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            📷 Foto
                           </button>
                           {isImg && (
                             <img
@@ -934,6 +936,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     try { return trip.returnProofUrls ? JSON.parse(trip.returnProofUrls) : [] } catch { return [] }
   })
   const returnFileRef = useRef<HTMLInputElement>(null)
+  const returnCameraRef = useRef<HTMLInputElement>(null)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState('')
@@ -1198,10 +1201,17 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '6px' }}>Comprovantes de devolução</label>
                   <input ref={returnFileRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleReturnFileChange} />
-                  <button onClick={() => returnFileRef.current?.click()}
-                    style={{ border: '1.5px solid #ef4444', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#fff', color: '#dc2626', cursor: 'pointer' }}>
-                    📎 Adicionar comprovante
-                  </button>
+                  <input ref={returnCameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleReturnFileChange} />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => returnFileRef.current?.click()}
+                      style={{ border: '1.5px solid #ef4444', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#fff', color: '#dc2626', cursor: 'pointer', flex: 1 }}>
+                      📎 Arquivo / Galeria
+                    </button>
+                    <button onClick={() => returnCameraRef.current?.click()}
+                      style={{ border: '1.5px solid #a5b4fc', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#f5f3ff', color: '#4f46e5', cursor: 'pointer', flex: 1 }}>
+                      📷 Tirar foto
+                    </button>
+                  </div>
                   {returnProofUrls.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
                       {returnProofUrls.map((url, idx) => {
@@ -1772,6 +1782,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   const utils = trpc.useUtils()
   const today = new Date().toISOString().slice(0, 10)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const tipos = costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
@@ -1889,13 +1900,21 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
       </Field>
 
       {/* ── Comprovantes ── */}
-      <Field label="Comprovantes" hint="Aceita imagens e PDFs — pode adicionar mais de um">
+      <Field label="Comprovantes" hint="Aceita imagens e PDFs — pode adicionar mais de um ou tirar foto">
         <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleFiles} />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          style={{ padding: '9px 16px', borderRadius: '10px', border: '1.5px dashed #cbd5e1', background: '#f8fafc', fontSize: '13px', fontWeight: '600', color: '#475569', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
-          📎 Adicionar comprovante
-        </button>
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFiles} />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{ padding: '9px 16px', borderRadius: '10px', border: '1.5px dashed #cbd5e1', background: '#f8fafc', fontSize: '13px', fontWeight: '600', color: '#475569', cursor: 'pointer', flex: 1, textAlign: 'center' }}>
+            📎 Arquivo / Galeria
+          </button>
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            style={{ padding: '9px 16px', borderRadius: '10px', border: '1.5px dashed #a5b4fc', background: '#f5f3ff', fontSize: '13px', fontWeight: '600', color: '#4f46e5', cursor: 'pointer', flex: 1, textAlign: 'center' }}>
+            📷 Tirar foto
+          </button>
+        </div>
         {attachments.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
             {attachments.map((url, idx) => {
@@ -2041,16 +2060,41 @@ function AbaInformativos() {
                         ℹ️ {item.costCenterName}
                       </span>
                     </td>
-                    <td style={tdSt}>
-                      {item.collaborator ? (
-                        <div>
-                          <div style={{ fontWeight: '600', color: '#0f172a' }}>{item.collaborator.name}</div>
-                          {item.collaborator.role && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.collaborator.role}</div>}
-                        </div>
-                      ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                    <td style={{ ...tdSt, maxWidth: '200px' }}>
+                      {(() => {
+                        const ids: string[] = (() => { try { return item.collaboratorIds ? JSON.parse(item.collaboratorIds) : [] } catch { return [] } })()
+                        if (ids.length > 1) {
+                          return (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                              {ids.map((id: string) => {
+                                const c = (collabs as any[])?.find((x: any) => x.id === id)
+                                return <span key={id} style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 7px', borderRadius: '10px', fontWeight: '600', whiteSpace: 'nowrap' }}>{c?.name ?? '—'}</span>
+                              })}
+                            </div>
+                          )
+                        }
+                        if (item.collaborator) return (
+                          <div>
+                            <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '13px' }}>{item.collaborator.name}</div>
+                            {item.collaborator.role && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.collaborator.role}</div>}
+                          </div>
+                        )
+                        return <span style={{ color: '#94a3b8' }}>—</span>
+                      })()}
                     </td>
-                    <td style={{ ...tdSt, color: '#374151', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.storeName || <span style={{ color: '#94a3b8' }}>—</span>}
+                    <td style={{ ...tdSt, maxWidth: '200px' }}>
+                      {(() => {
+                        if (!item.storeName) return <span style={{ color: '#94a3b8' }}>—</span>
+                        const names = item.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
+                        if (names.length <= 1) return <span style={{ color: '#374151', fontSize: '13px' }}>{item.storeName}</span>
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                            {names.map((name: string, i: number) => (
+                              <span key={i} style={{ fontSize: '11px', background: '#f0fdf4', color: '#166534', padding: '2px 7px', borderRadius: '10px', fontWeight: '600', border: '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>{name}</span>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td style={{ ...tdSt, color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.reason || <span style={{ color: '#94a3b8' }}>—</span>}

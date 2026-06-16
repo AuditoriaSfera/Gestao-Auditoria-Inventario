@@ -1309,7 +1309,7 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
           onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
           style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '13px', minWidth: '280px', flex: 1 }}
         />
-        <Btn onClick={() => setShowNew(true)}>+ Nova Viagem</Btn>
+        <Btn onClick={() => setShowNew(true)}>+ Nova Viagem (Adiantamento)</Btn>
       </div>
 
       <DataCard title={`Viagens (${trips.length})`}>

@@ -18,6 +18,74 @@ function custoTotal(salario: number, encargos: number): number {
   return salario + encargos
 }
 
+// ── Multi-select dropdown ────────────────────────────────────────────────────
+
+function MultiSelectDropdown({ options, selected, onChange, placeholder }: {
+  options: { value: string; label: string }[]
+  selected: string[]
+  onChange: (v: string[]) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  const toggle = (v: string) =>
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+
+  const label = selected.length === 0
+    ? placeholder
+    : selected.length === options.length
+      ? 'Todos'
+      : selected.length === 1
+        ? (options.find(o => o.value === selected[0])?.label ?? '1 selecionado')
+        : `${selected.length} selecionados`
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 199 }} onClick={() => setOpen(false)} />
+      )}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ padding: '9px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '14px', background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minWidth: '200px', maxWidth: '240px', justifyContent: 'space-between', position: 'relative', zIndex: 200 }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}>▾</span>
+      </button>
+      {open && (
+        <div
+          style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 300, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', minWidth: '220px', padding: '8px 0 0', maxHeight: '280px', overflowY: 'auto' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', gap: '6px', padding: '4px 10px 8px', borderBottom: '1px solid #f1f5f9' }}>
+            <button onClick={() => onChange(options.map(o => o.value))} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer' }}>Todos</button>
+            <button onClick={() => onChange([])} style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer' }}>Limpar</button>
+          </div>
+          {options.map(opt => {
+            const checked = selected.includes(opt.value)
+            return (
+              <div
+                key={opt.value}
+                onClick={() => toggle(opt.value)}
+                style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#374151', background: checked ? '#eff6ff' : 'transparent' }}
+                onMouseEnter={e => { if (!checked) e.currentTarget.style.background = '#f8fafc' }}
+                onMouseLeave={e => { e.currentTarget.style.background = checked ? '#eff6ff' : 'transparent' }}
+              >
+                <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${checked ? '#3b82f6' : '#d1d5db'}`, background: checked ? '#3b82f6' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
+                  {checked && <span style={{ color: 'white', fontSize: '11px', fontWeight: 'bold', lineHeight: 1 }}>✓</span>}
+                </div>
+                <span>{opt.label}</span>
+              </div>
+            )
+          })}
+          <div style={{ position: 'sticky', bottom: 0, background: 'white', borderTop: '1px solid #f1f5f9', padding: '8px 10px', textAlign: 'right' }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '8px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Modal de cadastro / edição ───────────────────────────────────────────────
 
 function SalarioModal({
@@ -198,7 +266,7 @@ const inputStyle: React.CSSProperties = {
 export default function SalariosPage() {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL')
-  const [filterCollab, setFilterCollab] = useState('')
+  const [filterCollabs, setFilterCollabs] = useState<string[]>([])
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState<any>(null)
   const [confirmDelete, setConfirmDelete] = useState<any>(null)
@@ -206,10 +274,10 @@ export default function SalariosPage() {
 
   const utils = trpc.useUtils()
 
+  // Busca todos e filtra client-side para suportar multi-select
   const { data: listData, isLoading } = trpc.auditCollaboratorSalaries.list.useQuery({
-    pageSize: 200,
+    pageSize: 500,
     status: filterStatus === 'ALL' ? undefined : filterStatus,
-    collaboratorId: filterCollab || undefined,
     search: search || undefined,
   })
   const { data: collabsRaw } = trpc.auditCollaborators.list.useQuery()
@@ -220,10 +288,23 @@ export default function SalariosPage() {
 
   function refresh() { utils.auditCollaboratorSalaries.list.invalidate() }
 
-  const items: any[] = listData?.items ?? []
+  const allItems: any[] = listData?.items ?? []
 
-  // KPIs
-  const activeItems = useMemo(() => items.filter(i => i.status === 'ACTIVE'), [items])
+  // Aplica filtro de colaboradores client-side
+  const items = useMemo(() =>
+    filterCollabs.length === 0
+      ? allItems
+      : allItems.filter(i => filterCollabs.includes(i.collaboratorId)),
+    [allItems, filterCollabs]
+  )
+
+  const collabOptions = useMemo(
+    () => collaborators.map((c: any) => ({ value: c.id, label: c.name + (c.role ? ` — ${c.role}` : '') })),
+    [collaborators]
+  )
+
+  // KPIs — sempre sobre todos os ativos (sem filtro de collab, para não distorcer)
+  const activeItems = useMemo(() => allItems.filter(i => i.status === 'ACTIVE'), [allItems])
   const totalMensalAtivo = useMemo(
     () => activeItems.reduce((s, i) => s + Number(i.salarioBase) + Number(i.encargos), 0),
     [activeItems]
@@ -281,15 +362,15 @@ export default function SalariosPage() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar colaborador..."
-          style={{ ...inputStyle, maxWidth: '220px' }}
+          placeholder="Buscar por nome..."
+          style={{ ...inputStyle, maxWidth: '200px' }}
         />
-        <select value={filterCollab} onChange={e => setFilterCollab(e.target.value)} style={{ ...inputStyle, maxWidth: '200px' }}>
-          <option value="">Todos os colaboradores</option>
-          {collaborators.map((c: any) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          options={collabOptions}
+          selected={filterCollabs}
+          onChange={setFilterCollabs}
+          placeholder="Todos os colaboradores"
+        />
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} style={{ ...inputStyle, maxWidth: '160px' }}>
           <option value="ALL">Todos os status</option>
           <option value="ACTIVE">Ativos</option>

@@ -1135,21 +1135,6 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
           <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px', textAlign: 'center' }}>✓ Viagem concluída e validada pelo financeiro.</div>
         ) : isSubmitted ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Dados de devolução da submissão atual (para o financeiro revisar) */}
-            {lastSubmittedEvent && (lastSubmittedEvent.returnedAmount ?? 0) > 0 && (
-              <div style={{ background: 'white', border: '1.5px solid #fde68a', borderRadius: '12px', padding: '14px 16px' }}>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Devolução enviada pelo colaborador</div>
-                <div style={{ fontSize: '14px', fontWeight: '700', color: '#92400e', marginBottom: lastSubmittedEvent.returnProofUrls?.length ? '4px' : 0 }}>
-                  💰 {formatCurrency(lastSubmittedEvent.returnedAmount!)}
-                  {toReturn > 0 && Math.abs(lastSubmittedEvent.returnedAmount! - toReturn) > 0.01 && (
-                    <span style={{ fontSize: '11px', fontWeight: '600', color: '#dc2626', marginLeft: '8px' }}>(diferença de {formatCurrency(Math.abs(lastSubmittedEvent.returnedAmount! - toReturn))} em relação ao esperado)</span>
-                  )}
-                </div>
-                {lastSubmittedEvent.returnProofUrls && lastSubmittedEvent.returnProofUrls.length > 0 && (
-                  <ProofThumbs urls={lastSubmittedEvent.returnProofUrls} />
-                )}
-              </div>
-            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
               <div style={{ color: '#92400e', fontWeight: '600', fontSize: '14px' }}>⏳ Aguardando validação do financeiro.</div>
               {!showRejectForm ? (

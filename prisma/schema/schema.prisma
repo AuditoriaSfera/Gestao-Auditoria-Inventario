@@ -1303,6 +1303,7 @@ model AuditCollaborator {
   expenses         AuditExpense[]
   formLinks        AuditFormLink[]
   informativeCosts AuditInformativeCost[]
+  salaries         AuditCollaboratorSalary[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1475,6 +1476,31 @@ model AuditInformativeCost {
   @@index([tripId])
   @@index([date])
   @@map("audit_informative_costs")
+}
+
+model AuditCollaboratorSalary {
+  id             String    @id @default(cuid())
+  collaboratorId String
+  cargo          String?
+  salarioBase    Decimal   @db.Decimal(15, 4)
+  encargos       Decimal   @db.Decimal(15, 4) @default(0)
+  status         String    @default("ACTIVE")
+  vigenciaInicio DateTime  @db.Date
+  vigenciaFim    DateTime? @db.Date
+  observacao     String?   @db.Text
+  createdBy      String?
+  updatedBy      String?
+
+  collaborator AuditCollaborator @relation(fields: [collaboratorId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([collaboratorId])
+  @@index([vigenciaInicio])
+  @@index([status])
+  @@map("audit_collaborator_salaries")
 }
 
 // ============================================================

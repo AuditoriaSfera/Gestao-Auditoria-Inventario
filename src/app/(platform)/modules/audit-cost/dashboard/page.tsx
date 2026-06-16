@@ -156,6 +156,7 @@ export default function AuditDashboardPage() {
   )
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: expenses } = trpc.auditCost.listExpenses.useQuery({ pageSize: 500 })
+  const { data: salariesData } = trpc.auditCollaboratorSalaries.list.useQuery({ pageSize: 500 })
 
   const collabOptions = useMemo(
     () => ((collabs as any[]) ?? []).map((c: any) => ({ value: c.id, label: c.name })),
@@ -234,6 +235,43 @@ export default function AuditDashboardPage() {
 
   const avgPerInventory = totalInventories > 0 ? totalMonthExpenses / totalInventories : 0
   const avgPerCollab = uniqueCollabsInPeriod > 0 ? totalMonthExpenses / uniqueCollabsInPeriod : 0
+
+  // ── Custo de pessoal (salários + encargos, 1x por colaborador por mês) ───────
+  const allSalaries: any[] = salariesData?.items ?? []
+  const personnelCostByCollab = useMemo(() => {
+    const result = new Map<string, { name: string; total: number }>()
+    for (const pk of selectedPeriods) {
+      const [y, m] = pk.split('-').map(Number)
+      const periodStart = new Date(y, m - 1, 1)
+      const periodEnd   = new Date(y, m, 0, 23, 59, 59)
+      const seen = new Set<string>()
+      // Sort by vigenciaInicio desc to pick most recent per collaborator
+      const sorted = [...allSalaries]
+        .filter(s => s.deletedAt == null && s.status === 'ACTIVE')
+        .filter(s => {
+          const vi = new Date(s.vigenciaInicio)
+          const vf = s.vigenciaFim ? new Date(s.vigenciaFim) : null
+          return vi <= periodEnd && (vf == null || vf >= periodStart)
+        })
+        .sort((a, b) => new Date(b.vigenciaInicio).getTime() - new Date(a.vigenciaInicio).getTime())
+      for (const s of sorted) {
+        if (seen.has(s.collaboratorId)) continue
+        seen.add(s.collaboratorId)
+        if (selectedCollabs.length > 0 && !selectedCollabs.includes(s.collaboratorId)) continue
+        const name = s.collaborator?.name ?? s.collaboratorId.slice(0, 8)
+        const cost = Number(s.salarioBase) + Number(s.encargos)
+        const prev = result.get(s.collaboratorId) ?? { name, total: 0 }
+        result.set(s.collaboratorId, { name, total: prev.total + cost })
+      }
+    }
+    return Array.from(result.values()).sort((a, b) => b.total - a.total)
+  }, [allSalaries, selectedPeriods, selectedCollabs])
+
+  const totalPersonnelCost = useMemo(
+    () => personnelCostByCollab.reduce((s, c) => s + c.total, 0),
+    [personnelCostByCollab]
+  )
+  const totalOperationCost = totalMonthExpenses + totalPersonnelCost
 
   // ── Agrupamentos para gráficos ───────────────────────────────────────────────
   const byCollaborator = useMemo(() => {
@@ -328,12 +366,14 @@ export default function AuditDashboardPage() {
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-        <KpiCard icon="💰" label="Total do Mês"             value={formatCurrency(totalMonthExpenses)} />
-        <KpiCard icon="📅" label="Dias em Viagem"           value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
-        <KpiCard icon="👥" label="Colaboradores"            value={String(uniqueCollabsInPeriod)} sub="no período" />
-        <KpiCard icon="🏪" label="Lojas Inventariadas"      value={String(uniqueStores)} sub="lojas únicas" />
-        <KpiCard icon="📋" label="Inventários Realizados"   value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
-        <KpiCard icon="📊" label="Custo Médio / Inventário" value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
+        <KpiCard icon="💰" label="Despesas de Viagem"        value={formatCurrency(totalMonthExpenses)} />
+        <KpiCard icon="👤" label="Custo de Pessoal"          value={formatCurrency(totalPersonnelCost)} sub={`${personnelCostByCollab.length} colaborador(es)`} />
+        <KpiCard icon="🏦" label="Custo Total Operação"      value={formatCurrency(totalOperationCost)} color="#2563eb" />
+        <KpiCard icon="📅" label="Dias em Viagem"            value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
+        <KpiCard icon="👥" label="Colaboradores"             value={String(uniqueCollabsInPeriod)} sub="no período" />
+        <KpiCard icon="🏪" label="Lojas Inventariadas"       value={String(uniqueStores)} sub="lojas únicas" />
+        <KpiCard icon="📋" label="Inventários Realizados"    value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
+        <KpiCard icon="📊" label="Custo Médio / Inventário"  value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
         <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
       </div>
 
@@ -420,6 +460,18 @@ export default function AuditDashboardPage() {
                   </div>
                 ))
               })()
+          }
+        </DataCard>
+
+        <DataCard title="Custo de Pessoal por Colaborador">
+          {personnelCostByCollab.length === 0 ? (
+            <EmptyState icon="👤" title="Sem dados" description="Nenhum salário ativo no período." />
+          ) : (() => {
+              const maxPerson = Math.max(...personnelCostByCollab.map(c => c.total), 1)
+              return personnelCostByCollab.map((c, i) => (
+                <Bar key={c.name} label={c.name} value={c.total} max={maxPerson} color="#8b5cf6" />
+              ))
+            })()
           }
         </DataCard>
 

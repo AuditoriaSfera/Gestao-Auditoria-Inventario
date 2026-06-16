@@ -87,6 +87,7 @@ const navItems: NavItem[] = [
     icon: DollarSign,
     children: [
       { href: '/modules/audit-cost/viagens', label: 'Cadastro de Viagens' },
+      { href: '/modules/audit-cost/salarios', label: 'Salários e Encargos' },
       { href: '/modules/audit-cost/dashboard', label: 'Dashboard' },
     ],
   },

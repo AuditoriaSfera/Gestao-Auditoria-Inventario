@@ -15,6 +15,7 @@ import { auditCollaboratorsRouter } from '@/modules/audit-cost/collaborators-rou
 import { auditTripsRouter } from '@/modules/audit-cost/trips-router'
 import { auditFormsRouter } from '@/modules/audit-cost/forms-router'
 import { auditCostTypesRouter } from '@/modules/audit-cost/cost-types-router'
+import { auditInformativeCostsRouter } from '@/modules/audit-cost/informative-costs-router'
 import { assetsRouter } from '@/modules/assets/router'
 import { inventoryRouter } from '@/modules/inventory/router'
 import { inventoryKpiRouter } from '@/modules/inventory-kpi/router'
@@ -38,6 +39,7 @@ export const appRouter = createTRPCRouter({
   auditTrips: auditTripsRouter,
   auditForms: auditFormsRouter,
   auditCostTypes: auditCostTypesRouter,
+  auditInformativeCosts: auditInformativeCostsRouter,
   assets: assetsRouter,
   inventory: inventoryRouter,
   inventoryKpi: inventoryKpiRouter,

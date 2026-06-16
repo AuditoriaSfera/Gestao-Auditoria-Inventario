@@ -1,0 +1,75 @@
+import { z } from 'zod'
+import { createTRPCRouter, protectedProcedure } from '@/server/trpc/init'
+import { paginate, buildPaginationMeta } from '@/lib/utils'
+
+export const auditInformativeCostsRouter = createTRPCRouter({
+  list: protectedProcedure
+    .input(z.object({
+      page: z.number().default(1),
+      pageSize: z.number().default(20),
+      tripId: z.string().optional(),
+      collaboratorId: z.string().optional(),
+      startDate: z.date().optional(),
+      endDate: z.date().optional(),
+      search: z.string().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { skip, take } = paginate(input.page, input.pageSize)
+      const where: any = {
+        deletedAt: null,
+        ...(input.tripId && { tripId: input.tripId }),
+        ...(input.collaboratorId && { collaboratorId: input.collaboratorId }),
+        ...(input.startDate || input.endDate ? { date: {
+          ...(input.startDate && { gte: input.startDate }),
+          ...(input.endDate   && { lte: input.endDate }),
+        }} : {}),
+        ...(input.search && { OR: [
+          { costCenterName: { contains: input.search, mode: 'insensitive' } },
+          { storeName:      { contains: input.search, mode: 'insensitive' } },
+          { reason:         { contains: input.search, mode: 'insensitive' } },
+          { collaborator:   { name: { contains: input.search, mode: 'insensitive' } } },
+        ]}),
+      }
+      const [items, total] = await Promise.all([
+        ctx.db.auditInformativeCost.findMany({
+          where, skip, take, orderBy: { date: 'desc' },
+          include: {
+            collaborator: { select: { id: true, name: true, role: true } },
+            trip: { select: { id: true, reason: true, stores: true, startDate: true, endDate: true } },
+          },
+        }),
+        ctx.db.auditInformativeCost.count({ where }),
+      ])
+      return { items, meta: buildPaginationMeta(total, input.page, input.pageSize) }
+    }),
+
+  create: protectedProcedure
+    .input(z.object({
+      tripId:        z.string().optional(),
+      costCenterName: z.string().min(1),
+      date:          z.date(),
+      storeName:     z.string().optional(),
+      reason:        z.string().optional(),
+      collaboratorId: z.string().optional(),
+      value:         z.number().min(0),
+      paymentMethod: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.db.auditInformativeCost.create({
+        data: {
+          ...input,
+          auditorId: ctx.session.user.id,
+          createdBy: ctx.session.user.id,
+        },
+      })
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.db.auditInformativeCost.update({
+        where: { id: input.id },
+        data: { deletedAt: new Date() },
+      })
+    }),
+})

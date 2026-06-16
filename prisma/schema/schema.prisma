@@ -1299,9 +1299,10 @@ model AuditCollaborator {
   isActive Boolean @default(true)
   createdBy String?
 
-  trips     AuditTrip[]
-  expenses  AuditExpense[]
-  formLinks AuditFormLink[]
+  trips            AuditTrip[]
+  expenses         AuditExpense[]
+  formLinks        AuditFormLink[]
+  informativeCosts AuditInformativeCost[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1342,9 +1343,10 @@ model AuditTrip {
   rejectionReason String?   @db.Text
   timeline        String?   @db.Text
 
-  collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
-  expenses     AuditExpense[]
-  formLinks    AuditFormLink[]
+  collaborator      AuditCollaborator?     @relation(fields: [collaboratorId], references: [id])
+  expenses          AuditExpense[]
+  formLinks         AuditFormLink[]
+  informativeCosts  AuditInformativeCost[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1446,6 +1448,32 @@ model AuditFormResponse {
   createdAt DateTime @default(now())
 
   @@map("audit_form_responses")
+}
+
+model AuditInformativeCost {
+  id             String   @id @default(cuid())
+  auditorId      String
+  tripId         String?
+  costCenterName String
+  date           DateTime @db.Date
+  storeName      String?
+  reason         String?  @db.Text
+  collaboratorId String?
+  value          Decimal  @db.Decimal(15, 4)
+  paymentMethod  String?
+  createdBy      String?
+
+  trip         AuditTrip?         @relation(fields: [tripId], references: [id])
+  collaborator AuditCollaborator? @relation(fields: [collaboratorId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([auditorId])
+  @@index([tripId])
+  @@index([date])
+  @@map("audit_informative_costs")
 }
 
 // ============================================================

@@ -1647,6 +1647,33 @@ function AbaEmAndamento() {
   )
 }
 
+// ─── Custos Informativos vinculados a uma viagem ─────────────────────────────
+function InformativosVinculados({ tripId }: { tripId: string }) {
+  const { data } = trpc.auditInformativeCosts.list.useQuery({ tripId, pageSize: 50 })
+  const items = data?.items ?? []
+  if (!items.length) return null
+  const total = items.reduce((s: number, i: any) => s + Number(i.value), 0)
+  return (
+    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '10px 14px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+        ℹ️ Custos Informativos ({items.length}) · Total: {formatCurrency(total)}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        {items.map((item: any) => (
+          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#1e40af', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: '600', whiteSpace: 'nowrap' }}>{new Date(item.date).toLocaleDateString('pt-BR')}</span>
+            <span style={{ background: '#dbeafe', padding: '1px 8px', borderRadius: '10px', fontWeight: '600', whiteSpace: 'nowrap' }}>{item.costCenterName}</span>
+            {item.collaborator && <span style={{ color: '#3b82f6' }}>{item.collaborator.name}</span>}
+            {item.storeName && <span style={{ color: '#64748b' }}>{item.storeName}</span>}
+            {item.reason && <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.reason}</span>}
+            <span style={{ fontWeight: '800', color: '#1e40af', marginLeft: 'auto', whiteSpace: 'nowrap' }}>{formatCurrency(Number(item.value))}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Aba: Viagens Concluídas ──────────────────────────────────────────────────
 function AbaConcluidas() {
   const [page, setPage] = useState(1)
@@ -1727,8 +1754,9 @@ function AbaConcluidas() {
                     </div>
                   </div>
                 </div>
-                <div style={{ padding: '0 16px 14px', borderTop: '1px solid #dcfce7', paddingTop: '10px' }}>
-                  <button onClick={() => setPrestacaoTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #86efac', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#166534' }}>📊 Ver Prestação</button>
+                <div style={{ padding: '0 16px 14px', borderTop: '1px solid #dcfce7', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button onClick={() => setPrestacaoTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #86efac', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#166534', alignSelf: 'flex-start' }}>📊 Ver Prestação</button>
+                  <InformativosVinculados tripId={t.id} />
                 </div>
               </div>
             ))}
@@ -1748,8 +1776,285 @@ function AbaConcluidas() {
   )
 }
 
+// ─── Modal Novo Custo Informativo ─────────────────────────────────────────────
+function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList, closedTrips }: {
+  onClose: () => void
+  onCreated?: () => void
+  collabsList: any[]
+  costTypes: any[]
+  storesList: any[]
+  closedTrips: any[]
+}) {
+  const utils = trpc.useUtils()
+  const today = new Date().toISOString().slice(0, 10)
+
+  const tipos = costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
+
+  const [form, setForm] = useState({
+    tripId: '',
+    costCenterName: '',
+    date: today,
+    storeName: '',
+    reason: '',
+    collaboratorId: '',
+    value: '',
+    paymentMethod: '',
+  })
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const createMut = trpc.auditInformativeCosts.create.useMutation()
+
+  function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function handleSave() {
+    if (!form.costCenterName) { setError('Selecione o centro de custo.'); return }
+    if (!form.date) { setError('Informe a data.'); return }
+    if (!form.value || isNaN(Number(form.value.replace(',', '.')))) { setError('Informe o valor.'); return }
+    setError('')
+    setSaving(true)
+    try {
+      await createMut.mutateAsync({
+        tripId:         form.tripId || undefined,
+        costCenterName: form.costCenterName,
+        date:           new Date(form.date + 'T12:00:00'),
+        storeName:      form.storeName || undefined,
+        reason:         form.reason || undefined,
+        collaboratorId: form.collaboratorId || undefined,
+        value:          Number(form.value.replace(',', '.')),
+        paymentMethod:  form.paymentMethod || undefined,
+      })
+      utils.auditInformativeCosts.list.invalidate()
+      onCreated ? onCreated() : onClose()
+    } catch (e: any) {
+      setError(e?.message ?? 'Erro ao salvar.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal title="Novo Custo Informativo" onClose={onClose}>
+      {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
+
+      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: '#1e40af' }}>
+        Registro informativo — não gera obrigação de prestação de contas nem afeta saldo de adiantamento.
+      </div>
+
+      <Field label="Centro de Custo *">
+        <select style={inp} value={form.costCenterName} onChange={e => set('costCenterName', e.target.value)}>
+          <option value="">Selecione o tipo de custo...</option>
+          {tipos.map((t: string) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </Field>
+
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <Field label="Data *" row>
+          <input style={inp} type="date" value={form.date} onChange={e => set('date', e.target.value)} />
+        </Field>
+        <Field label="Valor (R$) *" row>
+          <input style={inp} value={form.value} onChange={e => set('value', e.target.value)} inputMode="decimal" placeholder="0,00" />
+        </Field>
+      </div>
+
+      <Field label="Colaborador">
+        <select style={inp} value={form.collaboratorId} onChange={e => set('collaboratorId', e.target.value)}>
+          <option value="">— Selecione (opcional)</option>
+          {collabsList.map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>)}
+        </select>
+      </Field>
+
+      <Field label="Loja Inventariada">
+        <select style={inp} value={form.storeName} onChange={e => set('storeName', e.target.value)}>
+          <option value="">— Selecione (opcional)</option>
+          {storesList.map((s: any) => <option key={s.id} value={s.name}>{s.code ? `[${s.code}] ` : ''}{s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
+        </select>
+      </Field>
+
+      <Field label="Motivo">
+        <textarea style={{ ...inp, minHeight: '60px', resize: 'vertical' }} value={form.reason} onChange={e => set('reason', e.target.value)} placeholder="Descreva o motivo do custo..." />
+      </Field>
+
+      <Field label="Forma de Pagamento">
+        <input style={inp} value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} placeholder="Ex: Pix, Cartão, Dinheiro..." />
+      </Field>
+
+      <Field label="Vincular a Viagem Concluída" hint="Opcional — associa este custo a uma viagem já encerrada">
+        <select style={inp} value={form.tripId} onChange={e => set('tripId', e.target.value)}>
+          <option value="">— Sem vínculo</option>
+          {closedTrips.map((t: any) => (
+            <option key={t.id} value={t.id}>
+              {t.collaborator?.name ?? ''}{t.reason ? ` · ${t.reason}` : ''} · {new Date(t.startDate).toLocaleDateString('pt-BR')} → {new Date(t.endDate).toLocaleDateString('pt-BR')}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+        <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
+        <Btn onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar'}</Btn>
+      </div>
+    </Modal>
+  )
+}
+
+// ─── Aba: Custos Informativos ─────────────────────────────────────────────────
+function AbaInformativos() {
+  const utils = trpc.useUtils()
+  const [page, setPage] = useState(1)
+  const [filterSearch, setFilterSearch] = useState('')
+  const [filterFrom, setFilterFrom] = useState('')
+  const [filterTo, setFilterTo] = useState('')
+  const [showNew, setShowNew] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  const { data, isLoading } = trpc.auditInformativeCosts.list.useQuery({
+    page, pageSize: 20,
+    search: filterSearch || undefined,
+    startDate: filterFrom ? new Date(filterFrom) : undefined,
+    endDate: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
+  })
+  const { data: collabs }    = trpc.auditCollaborators.list.useQuery()
+  const { data: costTypes }  = trpc.auditCostTypes.list.useQuery()
+  const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
+  const { data: closedData } = trpc.auditTrips.list.useQuery({ pageSize: 200, status: 'CLOSED' })
+  const storesList   = storesData?.stores ?? []
+  const closedTrips  = closedData?.trips ?? []
+
+  const deleteMut = trpc.auditInformativeCosts.delete.useMutation({
+    onSuccess: () => { utils.auditInformativeCosts.list.invalidate(); setDeleteId(null) },
+  })
+
+  const items = data?.items ?? []
+  const hasFilters = filterSearch || filterFrom || filterTo
+
+  const thSt: React.CSSProperties = { padding: '9px 14px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', whiteSpace: 'nowrap' }
+  const tdSt: React.CSSProperties = { padding: '11px 14px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle', fontSize: '13px' }
+
+  return (
+    <>
+      {showNew && (
+        <NovoCustoInformativoModal
+          onClose={() => setShowNew(false)}
+          onCreated={() => setShowNew(false)}
+          collabsList={collabs ?? []}
+          costTypes={costTypes ?? []}
+          storesList={storesList}
+          closedTrips={closedTrips}
+        />
+      )}
+      {deleteId && (
+        <Modal title="Confirmar Exclusão" onClose={() => setDeleteId(null)}>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir este custo informativo?</div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Btn variant="outline" onClick={() => setDeleteId(null)}>Cancelar</Btn>
+            <Btn variant="danger" onClick={() => deleteMut.mutate({ id: deleteId })} disabled={deleteMut.isPending}>Excluir</Btn>
+          </div>
+        </Modal>
+      )}
+
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <div style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px', minWidth: '160px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pesquisar</label>
+            <input
+              placeholder="Colaborador, loja, motivo..."
+              value={filterSearch}
+              onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>De</label>
+            <input type="date" value={filterFrom} onChange={e => { setFilterFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
+            <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          {!!hasFilters && (
+            <button onClick={() => { setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+              style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
+              ✕ Limpar
+            </button>
+          )}
+        </div>
+        <Btn onClick={() => setShowNew(true)}>+ Novo Custo Informativo</Btn>
+      </div>
+
+      <DataCard title={`Custos Informativos (${data?.meta?.total ?? items.length})`}>
+        {isLoading ? <LoadingState /> : !items.length ? (
+          <EmptyState icon="ℹ️" title="Nenhum custo informativo" description='Clique em "+ Novo Custo Informativo" para registrar.' />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={thSt}>Data</th>
+                  <th style={thSt}>Centro de Custo</th>
+                  <th style={thSt}>Colaborador</th>
+                  <th style={thSt}>Loja</th>
+                  <th style={thSt}>Motivo</th>
+                  <th style={thSt}>Pagamento</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Valor</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item: any) => (
+                  <tr key={item.id} style={{ background: 'white' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'white'}>
+                    <td style={{ ...tdSt, whiteSpace: 'nowrap', color: '#374151' }}>{new Date(item.date).toLocaleDateString('pt-BR')}</td>
+                    <td style={tdSt}>
+                      <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#eff6ff', color: '#1d4ed8' }}>
+                        ℹ️ {item.costCenterName}
+                      </span>
+                    </td>
+                    <td style={tdSt}>
+                      {item.collaborator ? (
+                        <div>
+                          <div style={{ fontWeight: '600', color: '#0f172a' }}>{item.collaborator.name}</div>
+                          {item.collaborator.role && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.collaborator.role}</div>}
+                        </div>
+                      ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                    </td>
+                    <td style={{ ...tdSt, color: '#374151', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.storeName || <span style={{ color: '#94a3b8' }}>—</span>}
+                    </td>
+                    <td style={{ ...tdSt, color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.reason || <span style={{ color: '#94a3b8' }}>—</span>}
+                    </td>
+                    <td style={{ ...tdSt, color: '#64748b' }}>{item.paymentMethod || <span style={{ color: '#94a3b8' }}>—</span>}</td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(Number(item.value))}</td>
+                    <td style={{ ...tdSt, textAlign: 'right' }}>
+                      <button onClick={() => setDeleteId(item.id)}
+                        style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px' }}>
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {(data?.meta?.totalPages ?? 0) > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>Página {data!.meta.page} de {data!.meta.totalPages}</span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <Btn variant="outline" small disabled={!data!.meta.hasPrev} onClick={() => setPage(p => p - 1)}>← Anterior</Btn>
+              <Btn variant="outline" small disabled={!data!.meta.hasNext} onClick={() => setPage(p => p + 1)}>Próxima →</Btn>
+            </div>
+          </div>
+        )}
+      </DataCard>
+    </>
+  )
+}
+
 // ─── Página raiz com abas ─────────────────────────────────────────────────────
-type Tab = 'viagens' | 'emandamento' | 'concluidas' | 'colaboradores' | 'tipos'
+type Tab = 'viagens' | 'emandamento' | 'concluidas' | 'informativos' | 'colaboradores' | 'tipos'
 
 export default function ViagensPage() {
   const [tab, setTab] = useState<Tab>('viagens')
@@ -1760,12 +2065,14 @@ export default function ViagensPage() {
         <button style={tabStyle(tab === 'viagens')} onClick={() => setTab('viagens')}>✈️ Viagens</button>
         <button style={tabStyle(tab === 'emandamento')} onClick={() => setTab('emandamento')}>⏳ Em Andamento</button>
         <button style={tabStyle(tab === 'concluidas')} onClick={() => setTab('concluidas')}>✅ Concluídas</button>
+        <button style={tabStyle(tab === 'informativos')} onClick={() => setTab('informativos')}>ℹ️ Custos Informativos</button>
         <button style={tabStyle(tab === 'colaboradores')} onClick={() => setTab('colaboradores')}>👥 Colaboradores</button>
         <button style={tabStyle(tab === 'tipos')} onClick={() => setTab('tipos')}>🏷️ Tipos de Custo</button>
       </div>
       {tab === 'viagens' && <AbaViagens onGoEmAndamento={() => setTab('emandamento')} />}
       {tab === 'emandamento' && <AbaEmAndamento />}
       {tab === 'concluidas' && <AbaConcluidas />}
+      {tab === 'informativos' && <AbaInformativos />}
       {tab === 'colaboradores' && <AbaColaboradores />}
       {tab === 'tipos' && <AbaTiposCusto />}
     </ModulePage>

@@ -85,6 +85,21 @@ export const auditCostRouter = createTRPCRouter({
       })
     }),
 
+  setExpenseAttachment: protectedProcedure
+    .input(z.object({ id: z.string(), attachmentUrl: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.db.auditExpense.update({
+        where: { id: input.id },
+        data: { attachmentUrl: input.attachmentUrl ?? null },
+      })
+    }),
+
+  updateExpenseValue: protectedProcedure
+    .input(z.object({ id: z.string(), value: z.number().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.db.auditExpense.update({ where: { id: input.id }, data: { value: input.value } })
+    }),
+
   listAvailableMonths: protectedProcedure
     .query(async ({ ctx }) => {
       const expenses = await ctx.db.auditExpense.findMany({

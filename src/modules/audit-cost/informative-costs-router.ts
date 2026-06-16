@@ -51,13 +51,16 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       storeName:     z.string().optional(),
       reason:        z.string().optional(),
       collaboratorId: z.string().optional(),
-      value:         z.number().min(0),
-      paymentMethod: z.string().optional(),
+      value:          z.number().min(0),
+      paymentMethod:  z.string().optional(),
+      attachmentUrls: z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      const { attachmentUrls, ...rest } = input
       return ctx.db.auditInformativeCost.create({
         data: {
-          ...input,
+          ...rest,
+          attachmentUrls: attachmentUrls?.length ? JSON.stringify(attachmentUrls) : null,
           auditorId: ctx.session.user.id,
           createdBy: ctx.session.user.id,
         },

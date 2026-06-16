@@ -1777,21 +1777,21 @@ function AbaConcluidas() {
 }
 
 // ─── Modal Novo Custo Informativo ─────────────────────────────────────────────
-function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList, closedTrips }: {
+function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList }: {
   onClose: () => void
   onCreated?: () => void
   collabsList: any[]
   costTypes: any[]
   storesList: any[]
-  closedTrips: any[]
 }) {
   const utils = trpc.useUtils()
   const today = new Date().toISOString().slice(0, 10)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const tipos = costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
 
   const [form, setForm] = useState({
-    tripId: '',
     costCenterName: '',
     date: today,
     storeName: '',
@@ -1800,12 +1800,24 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
     value: '',
     paymentMethod: '',
   })
+  const [attachments, setAttachments] = useState<string[]>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const createMut = trpc.auditInformativeCosts.create.useMutation()
 
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
+
+  function handleFiles(ev: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(ev.target.files ?? [])
+    if (!files.length) return
+    for (const file of files) {
+      const reader = new FileReader()
+      reader.onload = e => setAttachments(prev => [...prev, e.target?.result as string])
+      reader.readAsDataURL(file)
+    }
+    ev.target.value = ''
+  }
 
   async function handleSave() {
     if (!form.costCenterName) { setError('Selecione o centro de custo.'); return }
@@ -1815,14 +1827,14 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
     setSaving(true)
     try {
       await createMut.mutateAsync({
-        tripId:         form.tripId || undefined,
-        costCenterName: form.costCenterName,
-        date:           new Date(form.date + 'T12:00:00'),
-        storeName:      form.storeName || undefined,
-        reason:         form.reason || undefined,
-        collaboratorId: form.collaboratorId || undefined,
-        value:          Number(form.value.replace(',', '.')),
-        paymentMethod:  form.paymentMethod || undefined,
+        costCenterName:  form.costCenterName,
+        date:            new Date(form.date + 'T12:00:00'),
+        storeName:       form.storeName || undefined,
+        reason:          form.reason || undefined,
+        collaboratorId:  form.collaboratorId || undefined,
+        value:           Number(form.value.replace(',', '.')),
+        paymentMethod:   form.paymentMethod || undefined,
+        attachmentUrls:  attachments.length ? attachments : undefined,
       })
       utils.auditInformativeCosts.list.invalidate()
       onCreated ? onCreated() : onClose()
@@ -1835,6 +1847,13 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
 
   return (
     <Modal title="Novo Custo Informativo" onClose={onClose}>
+      {lightboxUrl && (
+        <div onClick={() => setLightboxUrl(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
+          <img src={lightboxUrl} alt="comprovante" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px' }} onClick={e => e.stopPropagation()} />
+          <button onClick={() => setLightboxUrl(null)} style={{ position: 'absolute', top: '20px', right: '24px', background: 'rgba(255,255,255,0.15)', border: 'none', color: 'white', fontSize: '28px', cursor: 'pointer', borderRadius: '50%', width: '40px', height: '40px', lineHeight: '40px', textAlign: 'center' }}>✕</button>
+        </div>
+      )}
+
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
 
       <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: '#1e40af' }}>
@@ -1864,7 +1883,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
         </select>
       </Field>
 
-      <Field label="Loja Inventariada">
+      <Field label="Loja">
         <select style={inp} value={form.storeName} onChange={e => set('storeName', e.target.value)}>
           <option value="">— Selecione (opcional)</option>
           {storesList.map((s: any) => <option key={s.id} value={s.name}>{s.code ? `[${s.code}] ` : ''}{s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
@@ -1879,15 +1898,38 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
         <input style={inp} value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} placeholder="Ex: Pix, Cartão, Dinheiro..." />
       </Field>
 
-      <Field label="Vincular a Viagem Concluída" hint="Opcional — associa este custo a uma viagem já encerrada">
-        <select style={inp} value={form.tripId} onChange={e => set('tripId', e.target.value)}>
-          <option value="">— Sem vínculo</option>
-          {closedTrips.map((t: any) => (
-            <option key={t.id} value={t.id}>
-              {t.collaborator?.name ?? ''}{t.reason ? ` · ${t.reason}` : ''} · {new Date(t.startDate).toLocaleDateString('pt-BR')} → {new Date(t.endDate).toLocaleDateString('pt-BR')}
-            </option>
-          ))}
-        </select>
+      {/* ── Comprovantes ── */}
+      <Field label="Comprovantes" hint="Aceita imagens e PDFs — pode adicionar mais de um">
+        <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleFiles} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{ padding: '9px 16px', borderRadius: '10px', border: '1.5px dashed #cbd5e1', background: '#f8fafc', fontSize: '13px', fontWeight: '600', color: '#475569', cursor: 'pointer', width: '100%', textAlign: 'center' }}>
+          📎 Adicionar comprovante
+        </button>
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' }}>
+            {attachments.map((url, idx) => {
+              const isImg = url.startsWith('data:image')
+              return (
+                <div key={idx} style={{ position: 'relative', display: 'inline-block' }}>
+                  {isImg ? (
+                    <img src={url} alt={`comp ${idx + 1}`}
+                      onClick={() => setLightboxUrl(url)}
+                      style={{ height: '64px', width: '88px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #bfdbfe', cursor: 'zoom-in', display: 'block' }} />
+                  ) : (
+                    <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '8px', fontSize: '12px', color: '#1e40af', fontWeight: '600' }}>📄 {idx + 1}</div>
+                  )}
+                  <button
+                    onClick={() => setAttachments(p => p.filter((_, i) => i !== idx))}
+                    style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', border: 'none', background: '#ef4444', color: 'white', fontSize: '10px', cursor: 'pointer', lineHeight: '18px', textAlign: 'center', padding: 0 }}>✕</button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {attachments.length > 0 && (
+          <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600', marginTop: '6px' }}>✓ {attachments.length} comprovante(s) anexado(s)</div>
+        )}
       </Field>
 
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
@@ -1917,9 +1959,7 @@ function AbaInformativos() {
   const { data: collabs }    = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes }  = trpc.auditCostTypes.list.useQuery()
   const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
-  const { data: closedData } = trpc.auditTrips.list.useQuery({ pageSize: 200, status: 'CLOSED' })
-  const storesList   = storesData?.stores ?? []
-  const closedTrips  = closedData?.trips ?? []
+  const storesList = storesData?.stores ?? []
 
   const deleteMut = trpc.auditInformativeCosts.delete.useMutation({
     onSuccess: () => { utils.auditInformativeCosts.list.invalidate(); setDeleteId(null) },
@@ -1940,7 +1980,6 @@ function AbaInformativos() {
           collabsList={collabs ?? []}
           costTypes={costTypes ?? []}
           storesList={storesList}
-          closedTrips={closedTrips}
         />
       )}
       {deleteId && (
@@ -1997,6 +2036,7 @@ function AbaInformativos() {
                   <th style={thSt}>Motivo</th>
                   <th style={thSt}>Pagamento</th>
                   <th style={{ ...thSt, textAlign: 'right' }}>Valor</th>
+                  <th style={thSt}>Comprovantes</th>
                   <th style={{ ...thSt, textAlign: 'right' }}></th>
                 </tr>
               </thead>
@@ -2027,6 +2067,29 @@ function AbaInformativos() {
                     </td>
                     <td style={{ ...tdSt, color: '#64748b' }}>{item.paymentMethod || <span style={{ color: '#94a3b8' }}>—</span>}</td>
                     <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(Number(item.value))}</td>
+                    <td style={tdSt}>
+                      {(() => {
+                        const urls: string[] = (() => { try { return item.attachmentUrls ? JSON.parse(item.attachmentUrls) : [] } catch { return [] } })()
+                        if (!urls.length) return <span style={{ color: '#94a3b8', fontSize: '12px' }}>—</span>
+                        return (
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {urls.map((url: string, idx: number) => {
+                              const isImg = url.startsWith('data:image')
+                              return isImg ? (
+                                <img key={idx} src={url} alt={`comp ${idx + 1}`}
+                                  onClick={() => { const w = window.open(); w?.document.write(`<img src="${url}" style="max-width:100%">`) }}
+                                  style={{ height: '36px', width: '50px', objectFit: 'cover', borderRadius: '5px', border: '1px solid #bfdbfe', cursor: 'zoom-in' }} />
+                              ) : (
+                                <a key={idx} href={url} target="_blank" rel="noopener noreferrer"
+                                  style={{ fontSize: '11px', padding: '4px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', color: '#1e40af', textDecoration: 'none' }}>
+                                  📄 {idx + 1}
+                                </a>
+                              )
+                            })}
+                          </div>
+                        )
+                      })()}
+                    </td>
                     <td style={{ ...tdSt, textAlign: 'right' }}>
                       <button onClick={() => setDeleteId(item.id)}
                         style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px' }}>

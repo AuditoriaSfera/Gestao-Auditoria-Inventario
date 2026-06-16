@@ -1461,6 +1461,7 @@ model AuditInformativeCost {
   collaboratorId String?
   value          Decimal  @db.Decimal(15, 4)
   paymentMethod  String?
+  attachmentUrls String?  @db.Text
   createdBy      String?
 
   trip         AuditTrip?         @relation(fields: [tripId], references: [id])

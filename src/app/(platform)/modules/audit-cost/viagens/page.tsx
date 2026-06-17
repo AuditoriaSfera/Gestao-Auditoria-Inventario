@@ -179,7 +179,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   const label = selected.length === 0 ? null : allSelected ? `Todas (${options.length})` : selected.length > 1 ? `${selected.length} lojas` : selected[0]
   return (
     <div style={{ position: 'relative' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '36px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', minWidth: '280px', justifyContent: 'space-between' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '36px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 8px', minWidth: '170px', justifyContent: 'space-between' }}>
         <span style={{ fontSize: '12px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? '—'}</span>
         <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '4px' }}>{open ? '▲' : '▼'}</span>
       </div>
@@ -231,8 +231,8 @@ function TabelaDiaria({
   }
   if (!dates.length) return <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Defina as datas da viagem para preencher a tabela.</div>
 
-  const thSt: React.CSSProperties = { padding: '8px 10px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }
-  const tdSt: React.CSSProperties = { padding: '6px 8px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' }
+  const thSt: React.CSSProperties = { padding: '8px 8px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'normal', lineHeight: '1.3', verticalAlign: 'bottom' }
+  const tdSt: React.CSSProperties = { padding: '6px 6px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' }
 
   const totaisPorTipo: Record<string, number> = {}
   for (const tipo of tipos) totaisPorTipo[tipo] = 0
@@ -245,8 +245,8 @@ function TabelaDiaria({
           <tr>
             <th style={thSt}>Data</th>
             <th style={thSt}>Dia</th>
-            <th style={{ ...thSt, minWidth: '290px' }}>Loja do dia</th>
-            {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right', minWidth: '120px' }}>{t}</th>)}
+            <th style={{ ...thSt, minWidth: '180px', maxWidth: '220px' }}>Loja do dia</th>
+            {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right', minWidth: '85px', maxWidth: '100px' }}>{t}</th>)}
             <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
           </tr>
         </thead>
@@ -268,7 +268,7 @@ function TabelaDiaria({
                       onChange={e => setValue(d, t, e.target.value)}
                       placeholder="—"
                       inputMode="decimal"
-                      style={{ ...inpSm, textAlign: 'right', width: '130px' }}
+                      style={{ ...inpSm, textAlign: 'right', width: '80px' }}
                     />
                   </td>
                 ))}

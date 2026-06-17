@@ -266,6 +266,10 @@ function TabelaDiaria({
   }
   if (!dates.length) return <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Defina as datas da viagem para preencher a tabela.</div>
 
+  const stickyBase: React.CSSProperties = { position: 'sticky', zIndex: 2, background: '#f8fafc' }
+  const thSt: React.CSSProperties = { padding: '10px 10px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap', textAlign: 'left' }
+  const tdSt: React.CSSProperties = { padding: '8px 8px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' }
+
   const totaisPorTipo: Record<string, number> = {}
   for (const tipo of tipos) totaisPorTipo[tipo] = 0
   for (const d of dates) for (const tipo of tipos) totaisPorTipo[tipo] += parseMoney(rows[d]?.values?.[tipo] ?? '')
@@ -273,58 +277,65 @@ function TabelaDiaria({
 
   return (
     <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-      {/* Área com scroll vertical interno */}
-      <div style={{ maxHeight: '520px', overflowY: 'auto', overflowX: 'hidden' }}>
-        {dates.map((d, idx) => {
-          const row = rows[d] ?? { storeNames: [], values: {} }
-          const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
-          return (
-            <div key={d} style={{ borderBottom: idx < dates.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
-              {/* Cabeçalho do dia */}
-              <div style={{ background: '#f8fafc', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{fmtDate(d)}</span>
-                  <span style={{ fontSize: '12px', color: '#64748b', background: '#e2e8f0', borderRadius: '6px', padding: '2px 8px' }}>{diaSemana(d)}</span>
-                </div>
-                <span style={{ fontWeight: '700', fontSize: '14px', color: total > 0 ? '#1e40af' : '#cbd5e1' }}>
-                  {total > 0 ? formatCurrency(total) : '—'}
-                </span>
-              </div>
-              {/* Corpo do dia */}
-              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'white' }}>
-                {/* Loja do dia — largura total, campo principal */}
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Loja do dia</div>
-                  <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
-                </div>
-                {/* Grid de despesas — 2 colunas, nomes legíveis na horizontal */}
-                {tipos.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
-                    {tipos.map(t => (
-                      <div key={t}>
-                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t}>{t}</div>
-                        <input
-                          value={row.values?.[t] ?? ''}
-                          onChange={e => setValue(d, t, e.target.value)}
-                          placeholder="0,00"
-                          inputMode="decimal"
-                          style={{ ...inpSm, textAlign: 'right', width: '100%', boxSizing: 'border-box' as const, fontSize: '13px' }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-      {/* Rodapé com total geral — sempre visível fora do scroll */}
-      <div style={{ background: '#f8fafc', padding: '12px 16px', borderTop: '2px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Geral</span>
-        <span style={{ fontSize: '16px', fontWeight: '900', color: totalGeral > 0 ? '#0f172a' : '#cbd5e1' }}>
-          {totalGeral > 0 ? formatCurrency(totalGeral) : '—'}
-        </span>
+      {/* Scroll interno: horizontal para colunas extras, vertical para muitos dias */}
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '520px' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: '13px', width: '100%' }}>
+          <thead>
+            <tr>
+              {/* Colunas fixas (sticky) — sempre visíveis */}
+              <th style={{ ...thSt, ...stickyBase, left: 0, minWidth: '90px', borderRight: '1px solid #e2e8f0' }}>Data</th>
+              <th style={{ ...thSt, ...stickyBase, left: '90px', minWidth: '90px', borderRight: '1px solid #e2e8f0' }}>Dia</th>
+              <th style={{ ...thSt, ...stickyBase, left: '180px', minWidth: '200px', borderRight: '2px solid #e2e8f0' }}>Loja do dia</th>
+              {/* Colunas de despesa — rolam lateralmente */}
+              {tipos.map(t => (
+                <th key={t} style={{ ...thSt, minWidth: '110px', textAlign: 'right' }}>{t}</th>
+              ))}
+              <th style={{ ...thSt, textAlign: 'right', minWidth: '90px' }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {dates.map(d => {
+              const row = rows[d] ?? { storeNames: [], values: {} }
+              const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
+              return (
+                <tr key={d}>
+                  <td style={{ ...tdSt, ...stickyBase, left: 0, fontWeight: '600', color: '#0f172a', borderRight: '1px solid #e2e8f0' }}>{fmtDate(d)}</td>
+                  <td style={{ ...tdSt, ...stickyBase, left: '90px', color: '#64748b', fontSize: '12px', borderRight: '1px solid #e2e8f0' }}>{diaSemana(d)}</td>
+                  <td style={{ ...tdSt, ...stickyBase, left: '180px', borderRight: '2px solid #e2e8f0' }}>
+                    <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
+                  </td>
+                  {tipos.map(t => (
+                    <td key={t} style={{ ...tdSt, textAlign: 'right' }}>
+                      <input
+                        value={row.values?.[t] ?? ''}
+                        onChange={e => setValue(d, t, e.target.value)}
+                        placeholder="—"
+                        inputMode="decimal"
+                        style={{ ...inpSm, textAlign: 'right', width: '100px' }}
+                      />
+                    </td>
+                  ))}
+                  <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: total > 0 ? '#1e40af' : '#cbd5e1', whiteSpace: 'nowrap' }}>
+                    {total > 0 ? formatCurrency(total) : '—'}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: '#f8fafc' }}>
+              <td colSpan={3} style={{ ...tdSt, ...stickyBase, left: 0, fontWeight: '700', borderTop: '2px solid #e2e8f0', borderRight: '2px solid #e2e8f0' }}>Total</td>
+              {tipos.map(t => (
+                <td key={t} style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: '#1e40af', borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>
+                  {totaisPorTipo[t] > 0 ? formatCurrency(totaisPorTipo[t]) : '—'}
+                </td>
+              ))}
+              <td style={{ ...tdSt, textAlign: 'right', fontWeight: '900', color: '#0f172a', borderTop: '2px solid #e2e8f0', whiteSpace: 'nowrap', background: '#f8fafc' }}>
+                {formatCurrency(totalGeral)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   )

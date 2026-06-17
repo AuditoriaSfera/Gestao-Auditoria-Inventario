@@ -10,6 +10,305 @@ import { formatCurrency } from '@/lib/utils'
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
 
+// ── Wrapper clicável para os cards ────────────────────────────────────────────
+function ClickableCard({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <div onClick={onClick} style={{ cursor: 'pointer', borderRadius: '16px', transition: 'box-shadow 0.15s, transform 0.15s' }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(37,99,235,0.13)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = ''; (e.currentTarget as HTMLElement).style.transform = '' }}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ── Detalhe em tela cheia ─────────────────────────────────────────────────────
+function DetailView({ type, onClose, expenses, trips, salaries, collabs, selectedPeriods, effectiveCollabs }: {
+  type: 'colaborador' | 'centrocusto' | 'pagamento' | 'loja' | 'dias' | 'pessoal'
+  onClose: () => void
+  expenses: any[]; trips: any[]; salaries: any[]; collabs: any[]
+  selectedPeriods: string[]; effectiveCollabs: string[]
+}) {
+  const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+
+  const titles: Record<typeof type, string> = {
+    colaborador: 'Gastos por Colaborador',
+    centrocusto: 'Gastos por Centro de Custo',
+    pagamento: 'Por Forma de Pagamento',
+    loja: 'Gastos e Inventários por Loja',
+    dias: 'Dias em Viagem por Colaborador',
+    pessoal: 'Custo de Pessoal por Colaborador',
+  }
+
+  // Filtra despesas respeitando os filtros do detail
+  const filtered = useMemo(() => {
+    return expenses.filter(e => {
+      const inPeriod = selectedPeriods.length === 0 || selectedPeriods.some(pk => {
+        const [y, m] = pk.split('-').map(Number)
+        const d = new Date(e.date)
+        return d.getFullYear() === y && d.getMonth() + 1 === m
+      })
+      const inCollab = effectiveCollabs.length === 0 || effectiveCollabs.includes(e.collaboratorId) || effectiveCollabs.includes(e.auditorId)
+      const d = new Date(e.date)
+      const inFrom = !dateFrom || d >= new Date(dateFrom)
+      const inTo   = !dateTo   || d <= new Date(dateTo + 'T23:59:59')
+      const q = search.toLowerCase()
+      const inSearch = !q || (e.type ?? '').toLowerCase().includes(q) ||
+        (e.storeName ?? '').toLowerCase().includes(q) ||
+        (e.paymentMethod ?? '').toLowerCase().includes(q) ||
+        (collabs?.find((c: any) => c.id === (e.collaboratorId ?? e.auditorId))?.name ?? '').toLowerCase().includes(q)
+      return inPeriod && inCollab && inFrom && inTo && inSearch
+    })
+  }, [expenses, selectedPeriods, effectiveCollabs, dateFrom, dateTo, search, collabs])
+
+  const filteredTrips = useMemo(() => {
+    return trips.filter(t => {
+      const inPeriod = selectedPeriods.length === 0 || selectedPeriods.some(pk => {
+        const [y, m] = pk.split('-').map(Number)
+        const d = new Date(t.startDate)
+        return d.getFullYear() === y && d.getMonth() + 1 === m
+      })
+      const inCollab = effectiveCollabs.length === 0 || effectiveCollabs.includes(t.collaboratorId)
+      const q = search.toLowerCase()
+      const collab = collabs?.find((c: any) => c.id === t.collaboratorId)
+      const inSearch = !q || (collab?.name ?? '').toLowerCase().includes(q) || (t.stores ?? '').toLowerCase().includes(q) || (t.reason ?? '').toLowerCase().includes(q)
+      return inPeriod && inCollab && inSearch
+    })
+  }, [trips, selectedPeriods, effectiveCollabs, search, collabs])
+
+  const thSt: React.CSSProperties = { padding: '10px 14px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1 }
+  const tdSt: React.CSSProperties = { padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: '13px', verticalAlign: 'middle' }
+
+  function fmt(d: any) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—' }
+  function curr(v: any) { return `R$ ${Number(v).toFixed(2).replace('.', ',')}` }
+  function collabName(id: string) { return collabs?.find((c: any) => c.id === id)?.name ?? '—' }
+
+  // Agrupamento para cada tipo
+  const grouped = useMemo(() => {
+    if (type === 'colaborador') {
+      const map = new Map<string, { name: string; total: number; rows: any[] }>()
+      for (const e of filtered) {
+        const id = e.collaboratorId ?? e.auditorId ?? '?'
+        const name = collabName(id)
+        const prev = map.get(id) ?? { name, total: 0, rows: [] }
+        map.set(id, { name, total: prev.total + Number(e.value), rows: [...prev.rows, e] })
+      }
+      return [...map.values()].sort((a, b) => b.total - a.total)
+    }
+    if (type === 'centrocusto') {
+      const map = new Map<string, { name: string; total: number; rows: any[] }>()
+      for (const e of filtered) {
+        const key = e.type ?? 'Não informado'
+        const prev = map.get(key) ?? { name: key, total: 0, rows: [] }
+        map.set(key, { name: key, total: prev.total + Number(e.value), rows: [...prev.rows, e] })
+      }
+      return [...map.values()].sort((a, b) => b.total - a.total)
+    }
+    if (type === 'pagamento') {
+      const map = new Map<string, { name: string; total: number; rows: any[] }>()
+      for (const e of filtered) {
+        const key = e.paymentMethod ?? 'Não informado'
+        const prev = map.get(key) ?? { name: key, total: 0, rows: [] }
+        map.set(key, { name: key, total: prev.total + Number(e.value), rows: [...prev.rows, e] })
+      }
+      return [...map.values()].sort((a, b) => b.total - a.total)
+    }
+    if (type === 'loja') {
+      const map = new Map<string, { name: string; spent: number; inventories: number; rows: any[] }>()
+      for (const e of filtered) {
+        if (!e.storeName) continue
+        const prev = map.get(e.storeName) ?? { name: e.storeName, spent: 0, inventories: 0, rows: [] }
+        map.set(e.storeName, { ...prev, spent: prev.spent + Number(e.value), rows: [...prev.rows, e] })
+      }
+      for (const t of filteredTrips) {
+        if (!t.stores) continue
+        for (const sn of t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+          const prev = map.get(sn) ?? { name: sn, spent: 0, inventories: 0, rows: [] }
+          map.set(sn, { ...prev, inventories: prev.inventories + 1 })
+        }
+      }
+      return [...map.values()].sort((a, b) => b.inventories - a.inventories || b.spent - a.spent)
+    }
+    return []
+  }, [type, filtered, filteredTrips, collabs])
+
+  const salFiltered = useMemo(() => {
+    if (type !== 'pessoal') return []
+    const q = search.toLowerCase()
+    return salaries.filter(s => s.deletedAt == null && s.status === 'ACTIVE' &&
+      (effectiveCollabs.length === 0 || effectiveCollabs.includes(s.collaboratorId)) &&
+      (!q || (s.collaborator?.name ?? '').toLowerCase().includes(q) || (s.cargo ?? '').toLowerCase().includes(q))
+    ).sort((a, b) => (Number(b.salarioBase) + Number(b.encargos)) - (Number(a.salarioBase) + Number(a.encargos)))
+  }, [type, salaries, effectiveCollabs, search])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: '#f8fafc', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 24px', background: 'white', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          ← Voltar
+        </button>
+        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>{titles[type]}</h2>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', padding: '14px 24px', background: 'white', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+        <input placeholder="Pesquisar..." value={search} onChange={e => setSearch(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', minWidth: '220px', flex: 1 }} />
+        {type !== 'pessoal' && type !== 'dias' && (<>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <label style={{ fontSize: '10px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase' }}>De</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <label style={{ fontSize: '10px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase' }}>Até</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: '7px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          {(search || dateFrom || dateTo) && (
+            <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }} style={{ alignSelf: 'flex-end', padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '13px', color: '#64748b' }}>✕ Limpar</button>
+          )}
+        </>)}
+      </div>
+
+      {/* Conteúdo */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+
+        {/* Despesas agrupadas */}
+        {(type === 'colaborador' || type === 'centrocusto' || type === 'pagamento') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
+              grouped.map((g: any) => (
+                <div key={g.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{g.name}</span>
+                    <span style={{ fontWeight: '800', fontSize: '15px', color: '#2563eb' }}>{curr(g.total)}</span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={thSt}>Data</th>
+                          {type === 'colaborador' && <th style={thSt}>Centro de Custo</th>}
+                          {type === 'centrocusto' && <th style={thSt}>Colaborador</th>}
+                          {type === 'pagamento'   && <th style={thSt}>Colaborador</th>}
+                          <th style={thSt}>Loja</th>
+                          <th style={thSt}>Forma de Pagamento</th>
+                          <th style={{ ...thSt, textAlign: 'right' }}>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.rows.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((e: any) => (
+                          <tr key={e.id}>
+                            <td style={tdSt}>{fmt(e.date)}</td>
+                            {type === 'colaborador' && <td style={tdSt}>{e.type ?? '—'}</td>}
+                            {type === 'centrocusto' && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
+                            {type === 'pagamento'   && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
+                            <td style={tdSt}>{e.storeName ?? '—'}</td>
+                            <td style={tdSt}>{e.paymentMethod ?? '—'}</td>
+                            <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{curr(e.value)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {/* Lojas */}
+        {type === 'loja' && (
+          grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
+          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={thSt}>Loja</th>
+                <th style={{ ...thSt, textAlign: 'center' }}>Inventários</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>Total Gasto</th>
+              </tr></thead>
+              <tbody>
+                {(grouped as any[]).map((s: any) => (
+                  <tr key={s.name}>
+                    <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.name}</span></td>
+                    <td style={{ ...tdSt, textAlign: 'center' }}>{s.inventories > 0 ? <span style={{ background: '#dbeafe', color: '#1d4ed8', borderRadius: '20px', padding: '2px 10px', fontWeight: '700', fontSize: '12px' }}>{s.inventories} inv.</span> : '—'}</td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{s.spent > 0 ? curr(s.spent) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Dias em viagem */}
+        {type === 'dias' && (
+          filteredTrips.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhuma viagem encontrada.</div> :
+          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={thSt}>Colaborador</th>
+                <th style={thSt}>Destino / Lojas</th>
+                <th style={thSt}>Período</th>
+                <th style={thSt}>Motivo</th>
+                <th style={{ ...thSt, textAlign: 'center' }}>Dias</th>
+              </tr></thead>
+              <tbody>
+                {filteredTrips.sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map((t: any) => {
+                  const s = new Date(t.startDate); const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
+                  let days = 0; const cur = new Date(s); while (cur <= e) { days++; cur.setDate(cur.getDate() + 1) }
+                  return (
+                    <tr key={t.id}>
+                      <td style={tdSt}><span style={{ fontWeight: '600' }}>{collabName(t.collaboratorId)}</span></td>
+                      <td style={tdSt}><div>{t.city}{t.state ? `/${t.state}` : ''}</div>{t.stores && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.stores}</div>}</td>
+                      <td style={tdSt}>{fmt(t.startDate)} → {fmt(t.endDate)}</td>
+                      <td style={tdSt}>{t.reason ?? '—'}</td>
+                      <td style={{ ...tdSt, textAlign: 'center', fontWeight: '700' }}>{days}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pessoal */}
+        {type === 'pessoal' && (
+          salFiltered.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
+          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={thSt}>Colaborador</th>
+                <th style={thSt}>Cargo</th>
+                <th style={thSt}>Time</th>
+                <th style={thSt}>Vigência</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>Salário Base</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>Encargos</th>
+                <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
+              </tr></thead>
+              <tbody>
+                {salFiltered.map((s: any) => (
+                  <tr key={s.id}>
+                    <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.collaborator?.name ?? '—'}</span></td>
+                    <td style={tdSt}>{s.cargo ?? '—'}</td>
+                    <td style={tdSt}><span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: s.tipoTime === 'campo' ? '#e0f2fe' : '#ede9fe', color: s.tipoTime === 'campo' ? '#0369a1' : '#6d28d9' }}>{s.tipoTime === 'campo' ? '🏃 Campo' : '🖥️ Adm.'}</span></td>
+                    <td style={tdSt}>{fmt(s.vigenciaInicio)}{s.vigenciaFim ? ` → ${fmt(s.vigenciaFim)}` : ' → atual'}</td>
+                    <td style={{ ...tdSt, textAlign: 'right' }}>{curr(s.salarioBase)}</td>
+                    <td style={{ ...tdSt, textAlign: 'right' }}>{curr(s.encargos)}</td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: '800', color: '#0f172a' }}>{curr(Number(s.salarioBase) + Number(s.encargos))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+      </div>
+    </div>
+  )
+}
+
 // ── Multi-select dropdown ─────────────────────────────────────────────────────
 function MultiSelectDropdown({ options, selected, onChange, placeholder }: {
   options: { value: string; label: string }[]
@@ -132,10 +431,13 @@ function tripInAnyPeriod(trip: any, periods: string[]): boolean {
   })
 }
 
+type DetailCard = 'colaborador' | 'centrocusto' | 'pagamento' | 'loja' | 'dias' | 'pessoal'
+
 export default function AuditDashboardPage() {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
   const [selectedCollabs, setSelectedCollabs] = useState<string[]>([])
   const [filterTipoTime, setFilterTipoTime] = useState<'' | 'campo' | 'administrativo'>('')
+  const [detailCard, setDetailCard] = useState<DetailCard | null>(null)
 
   const { data: availablePeriods } = trpc.auditTrips.listAvailablePeriods.useQuery()
 
@@ -565,118 +867,132 @@ export default function AuditDashboardPage() {
         )
       })()}
 
+      {detailCard && (
+        <DetailView
+          type={detailCard}
+          onClose={() => setDetailCard(null)}
+          expenses={expenses?.expenses ?? []}
+          trips={tripsAll}
+          salaries={allSalaries}
+          collabs={collabs as any[]}
+          selectedPeriods={selectedPeriods}
+          effectiveCollabs={effectiveCollabs}
+        />
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
 
-        <DataCard title="Gastos por Colaborador">
-          {!byCollaborator.length
-            ? <EmptyState icon="👥" title="Sem dados" description="Nenhuma despesa no período." />
-            : byCollaborator.map((c, i) => (
-                <Bar key={c.name} label={c.name} value={c.total} max={maxBarVal}
-                  color={BAR_COLORS[i % BAR_COLORS.length]}
-                  badge={c.days > 0 ? `${c.days}d` : undefined} />
-              ))
-          }
-        </DataCard>
-
-        <DataCard title="Gastos por Centro de Custo">
-          {!byCostCenter.length
-            ? <EmptyState icon="📂" title="Sem dados" description="Nenhuma despesa no período." />
-            : byCostCenter.map((c, i) => (
-                <Bar key={c.label} label={c.label} value={c.value} max={maxCcVal} color={BAR_COLORS[i % BAR_COLORS.length]} />
-              ))
-          }
-        </DataCard>
-
-        <DataCard title="Por Forma de Pagamento">
-          {!byPayment.length
-            ? <EmptyState icon="💳" title="Sem dados" description="Nenhuma despesa no período." />
-            : byPayment.map((c, i) => (
-                <Bar key={c.label} label={c.label} value={c.value} max={maxPayVal} color={BAR_COLORS[(i + 2) % BAR_COLORS.length]} />
-              ))
-          }
-        </DataCard>
-
-        <DataCard title="Gastos e Inventários por Loja (Top 10)">
-          {!byStore.length
-            ? <EmptyState icon="🏪" title="Sem dados" description="Nenhuma despesa ou visita com loja no período." />
-            : (
-              <div>
-                {byStore.map((s, i) => (
-                  <Bar key={s.label} label={s.label} value={s.spent} max={maxStoreVal}
-                    color={BAR_COLORS[(i + 4) % BAR_COLORS.length]}
-                    badge={s.inventories > 0 ? `${s.inventories} inv.` : undefined} />
-                ))}
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
-                  Badge azul = quantidade de inventários realizados na loja
-                </div>
-              </div>
-            )
-          }
-        </DataCard>
-
-        <DataCard title="Dias em Viagem por Colaborador">
-          {!tripsInPeriod.length
-            ? <EmptyState icon="📅" title="Sem viagens" description="Nenhuma viagem no período." />
-            : (() => {
-                const daysMap = new Map<string, { name: string; days: number }>()
-                const setsMap = new Map<string, Set<string>>()
-                for (const t of tripsInPeriod) {
-                  if (!t.collaboratorId || !t.startDate) continue
-                  const collab = (collabs as any[])?.find((c: any) => c.id === t.collaboratorId)
-                  const name = collab?.name ?? t.collaboratorId.slice(0, 8)
-                  if (!daysMap.has(t.collaboratorId)) { daysMap.set(t.collaboratorId, { name, days: 0 }); setsMap.set(t.collaboratorId, new Set()) }
-                  const s = new Date(t.startDate)
-                  const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
-                  const cur = new Date(s)
-                  while (cur <= e) { setsMap.get(t.collaboratorId)!.add(cur.toISOString().slice(0, 10)); cur.setDate(cur.getDate() + 1) }
-                }
-                for (const [id, set] of setsMap) {
-                  const prev = daysMap.get(id)!
-                  daysMap.set(id, { ...prev, days: set.size })
-                }
-                const rows = Array.from(daysMap.values()).sort((a, b) => b.days - a.days)
-                const maxDays = Math.max(...rows.map(r => r.days), 1)
-                return rows.map((r, i) => (
-                  <div key={r.name} style={{ marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-                      <span style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>{r.name}</span>
-                      <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{r.days} dia{r.days !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '10px' }}>
-                      <div style={{ background: BAR_COLORS[i % BAR_COLORS.length], borderRadius: '6px', height: '10px', width: `${(r.days / maxDays) * 100}%`, transition: 'width 0.5s' }} />
-                    </div>
-                  </div>
+        <ClickableCard onClick={() => setDetailCard('colaborador')}>
+          <DataCard title="Gastos por Colaborador">
+            {!byCollaborator.length
+              ? <EmptyState icon="👥" title="Sem dados" description="Nenhuma despesa no período." />
+              : byCollaborator.map((c, i) => (
+                  <Bar key={c.name} label={c.name} value={c.total} max={maxBarVal}
+                    color={BAR_COLORS[i % BAR_COLORS.length]}
+                    badge={c.days > 0 ? `${c.days}d` : undefined} />
                 ))
-              })()
-          }
-        </DataCard>
+            }
+          </DataCard>
+        </ClickableCard>
 
-        <DataCard title="Custo de Pessoal por Colaborador">
-          {personnelCostByCollab.length === 0 ? (
-            <EmptyState icon="👤" title="Sem dados" description="Nenhum salário ativo no período." />
-          ) : (() => {
-              const maxPerson = Math.max(...personnelCostByCollab.map(c => c.total), 1)
-              const campo = personnelCostByCollab.filter(c => c.tipoTime === 'campo')
-              const adm   = personnelCostByCollab.filter(c => c.tipoTime === 'administrativo')
-              return (
-                <>
-                  {campo.length > 0 && (
-                    <>
+        <ClickableCard onClick={() => setDetailCard('centrocusto')}>
+          <DataCard title="Gastos por Centro de Custo">
+            {!byCostCenter.length
+              ? <EmptyState icon="📂" title="Sem dados" description="Nenhuma despesa no período." />
+              : byCostCenter.map((c, i) => (
+                  <Bar key={c.label} label={c.label} value={c.value} max={maxCcVal} color={BAR_COLORS[i % BAR_COLORS.length]} />
+                ))
+            }
+          </DataCard>
+        </ClickableCard>
+
+        <ClickableCard onClick={() => setDetailCard('pagamento')}>
+          <DataCard title="Por Forma de Pagamento">
+            {!byPayment.length
+              ? <EmptyState icon="💳" title="Sem dados" description="Nenhuma despesa no período." />
+              : byPayment.map((c, i) => (
+                  <Bar key={c.label} label={c.label} value={c.value} max={maxPayVal} color={BAR_COLORS[(i + 2) % BAR_COLORS.length]} />
+                ))
+            }
+          </DataCard>
+        </ClickableCard>
+
+        <ClickableCard onClick={() => setDetailCard('loja')}>
+          <DataCard title="Gastos e Inventários por Loja (Top 10)">
+            {!byStore.length
+              ? <EmptyState icon="🏪" title="Sem dados" description="Nenhuma despesa ou visita com loja no período." />
+              : (
+                <div>
+                  {byStore.map((s, i) => (
+                    <Bar key={s.label} label={s.label} value={s.spent} max={maxStoreVal}
+                      color={BAR_COLORS[(i + 4) % BAR_COLORS.length]}
+                      badge={s.inventories > 0 ? `${s.inventories} inv.` : undefined} />
+                  ))}
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>Badge azul = quantidade de inventários realizados na loja</div>
+                </div>
+              )
+            }
+          </DataCard>
+        </ClickableCard>
+
+        <ClickableCard onClick={() => setDetailCard('dias')}>
+          <DataCard title="Dias em Viagem por Colaborador">
+            {!tripsInPeriod.length
+              ? <EmptyState icon="📅" title="Sem viagens" description="Nenhuma viagem no período." />
+              : (() => {
+                  const daysMap = new Map<string, { name: string; days: number }>()
+                  const setsMap = new Map<string, Set<string>>()
+                  for (const t of tripsInPeriod) {
+                    if (!t.collaboratorId || !t.startDate) continue
+                    const collab = (collabs as any[])?.find((c: any) => c.id === t.collaboratorId)
+                    const name = collab?.name ?? t.collaboratorId.slice(0, 8)
+                    if (!daysMap.has(t.collaboratorId)) { daysMap.set(t.collaboratorId, { name, days: 0 }); setsMap.set(t.collaboratorId, new Set()) }
+                    const s = new Date(t.startDate); const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate); const cur = new Date(s)
+                    while (cur <= e) { setsMap.get(t.collaboratorId)!.add(cur.toISOString().slice(0, 10)); cur.setDate(cur.getDate() + 1) }
+                  }
+                  for (const [id, set] of setsMap) { const prev = daysMap.get(id)!; daysMap.set(id, { ...prev, days: set.size }) }
+                  const rows = Array.from(daysMap.values()).sort((a, b) => b.days - a.days)
+                  const maxDays = Math.max(...rows.map(r => r.days), 1)
+                  return rows.map((r, i) => (
+                    <div key={r.name} style={{ marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                        <span style={{ fontSize: '13px', color: '#374151', fontWeight: '500' }}>{r.name}</span>
+                        <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{r.days} dia{r.days !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '10px' }}>
+                        <div style={{ background: BAR_COLORS[i % BAR_COLORS.length], borderRadius: '6px', height: '10px', width: `${(r.days / maxDays) * 100}%`, transition: 'width 0.5s' }} />
+                      </div>
+                    </div>
+                  ))
+                })()
+            }
+          </DataCard>
+        </ClickableCard>
+
+        <ClickableCard onClick={() => setDetailCard('pessoal')}>
+          <DataCard title="Custo de Pessoal por Colaborador">
+            {personnelCostByCollab.length === 0 ? (
+              <EmptyState icon="👤" title="Sem dados" description="Nenhum salário ativo no período." />
+            ) : (() => {
+                const maxPerson = Math.max(...personnelCostByCollab.map(c => c.total), 1)
+                const campo = personnelCostByCollab.filter(c => c.tipoTime === 'campo')
+                const adm   = personnelCostByCollab.filter(c => c.tipoTime === 'administrativo')
+                return (
+                  <>
+                    {campo.length > 0 && (<>
                       <div style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', marginTop: '4px' }}>🏃 Time de Campo</div>
                       {campo.map(c => <Bar key={c.name} label={c.name} value={c.total} max={maxPerson} color="#0ea5e9" />)}
-                    </>
-                  )}
-                  {adm.length > 0 && (
-                    <>
+                    </>)}
+                    {adm.length > 0 && (<>
                       <div style={{ fontSize: '11px', fontWeight: '700', color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', marginTop: campo.length > 0 ? '14px' : '4px' }}>🖥️ Administrativo</div>
                       {adm.map(c => <Bar key={c.name} label={c.name} value={c.total} max={maxPerson} color="#8b5cf6" />)}
-                    </>
-                  )}
-                </>
-              )
-            })()
-          }
-        </DataCard>
+                    </>)}
+                  </>
+                )
+              })()
+            }
+          </DataCard>
+        </ClickableCard>
 
       </div>
     </ModulePage>

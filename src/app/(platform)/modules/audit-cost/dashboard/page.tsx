@@ -721,11 +721,14 @@ export default function AuditDashboardPage() {
       .slice(0, 10)
   }, [monthExpenses, tripsInPeriod])
 
-  // ── Custo por mês (histórico de todos os períodos disponíveis) ──────────────
+  // ── Custo por mês (somente períodos selecionados no filtro) ──────────────────
   const byMonth = useMemo(() => {
     if (!availablePeriods?.length) return []
     const allExp: any[] = expenses?.expenses ?? []
-    return [...availablePeriods]
+    const activePeriods = selectedPeriods.length > 0
+      ? availablePeriods.filter(p => selectedPeriods.includes(`${p.year}-${p.month}`))
+      : availablePeriods
+    return [...activePeriods]
       .slice()
       .reverse() // ordem cronológica (mais antigo → mais recente)
       .map(p => {
@@ -759,7 +762,7 @@ export default function AuditDashboardPage() {
 
         return { label: p.label, expTotal, salTotal, total: expTotal + salTotal }
       })
-  }, [availablePeriods, expenses, allSalaries])
+  }, [availablePeriods, selectedPeriods, expenses, allSalaries])
 
   const maxMonthVal = Math.max(...byMonth.map(m => m.total), 1)
 

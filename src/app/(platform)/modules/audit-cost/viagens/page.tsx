@@ -59,6 +59,69 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: '13px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', marginTop: '4px', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>{children}</div>
 }
 
+// ─── Camera Modal (getUserMedia) ─────────────────────────────────────────────
+function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => void; onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [error, setError] = useState('')
+  const [captured, setCaptured] = useState<string | null>(null)
+
+  useEffect(() => {
+    let s: MediaStream | null = null
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      .then(ms => {
+        s = ms
+        setStream(ms)
+        if (videoRef.current) { videoRef.current.srcObject = ms; videoRef.current.play() }
+      })
+      .catch(err => setError('Câmera não disponível. ' + (err.message || err.name)))
+    return () => { s?.getTracks().forEach(t => t.stop()) }
+  }, [])
+
+  function capture() {
+    if (!videoRef.current) return
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.current.videoWidth
+    canvas.height = videoRef.current.videoHeight
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0)
+    setCaptured(canvas.toDataURL('image/jpeg', 0.88))
+    stream?.getTracks().forEach(t => t.stop())
+  }
+
+  function confirm() { if (captured) { onCapture(captured); onClose() } }
+  function retake() { setCaptured(null); setStream(null); setError(''); navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(ms => { setStream(ms); if (videoRef.current) { videoRef.current.srcObject = ms; videoRef.current.play() } }).catch(err => setError(err.message)) }
+  function close() { stream?.getTracks().forEach(t => t.stop()); onClose() }
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 99999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', padding: '16px' }}>
+      {error ? (
+        <div style={{ color: 'white', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', marginBottom: '12px' }}>📷</div>
+          <div style={{ fontSize: '13px', color: '#fca5a5', marginBottom: '16px', maxWidth: '300px' }}>{error}</div>
+          <button onClick={close} style={{ padding: '8px 24px', background: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>Fechar</button>
+        </div>
+      ) : captured ? (
+        <>
+          <img src={captured} alt="foto" style={{ maxWidth: '90vw', maxHeight: '65vh', borderRadius: '12px', border: '3px solid #22c55e' }} />
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={retake} style={{ padding: '11px 22px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.3)', borderRadius: '10px', fontSize: '14px', cursor: 'pointer', fontWeight: '600' }}>↩ Tirar novamente</button>
+            <button onClick={confirm} style={{ padding: '11px 28px', background: '#22c55e', color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>✓ Usar esta foto</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <video ref={videoRef} autoPlay playsInline muted style={{ maxWidth: '90vw', maxHeight: '65vh', borderRadius: '12px', border: '2px solid rgba(255,255,255,0.3)', background: '#111' }} />
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button onClick={close} style={{ padding: '11px 20px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1.5px solid rgba(255,255,255,0.3)', borderRadius: '10px', fontSize: '14px', cursor: 'pointer' }}>Cancelar</button>
+            <button onClick={capture} style={{ padding: '11px 32px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' }}>📷 Tirar Foto</button>
+          </div>
+        </>
+      )}
+    </div>,
+    document.body
+  )
+}
+
 // ─── Multi-select de Lojas ────────────────────────────────────────────────────
 function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
   const [search, setSearch] = useState('')
@@ -709,6 +772,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const pendingSaveRef = useRef<{ key: string; idx: number } | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
+  const [cameraExpId, setCameraExpId] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {}
     for (const e of gastoExp) init[e.id] = e.attachmentUrl ?? ''
@@ -880,7 +944,6 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                       return (
                         <div key={expId} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
                           <input type="file" accept="image/*,application/pdf" id={fileInputId} style={{ display: 'none' }} onChange={handleExpFile} />
-                          <input type="file" accept="image/*" capture id={cameraInputId} style={{ display: 'none' }} onChange={handleExpFile} />
                           <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
                             R$ {Number(e.value).toFixed(2).replace('.', ',')}
                           </span>
@@ -890,10 +953,16 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                             {savingAttach === expId ? '⏳' : hasAttach ? '✓ Comprovante' : '📎 Arquivo'}
                           </button>
                           <button
-                            onClick={() => { (document.getElementById(cameraInputId) as HTMLInputElement)?.click() }}
+                            onClick={() => setCameraExpId(expId)}
                             style={{ padding: '3px 9px', borderRadius: '6px', border: '1.5px solid #a5b4fc', background: '#f5f3ff', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: '#4f46e5', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             📷 Câmera
                           </button>
+                          {cameraExpId === expId && (
+                            <CameraModal
+                              onCapture={dataUrl => { setAttachments(a => ({ ...a, [expId]: dataUrl })); saveAttachment(expId, dataUrl); setCameraExpId(null) }}
+                              onClose={() => setCameraExpId(null)}
+                            />
+                          )}
                           {isImg && (
                             <img
                               src={attachUrl} alt="comp"
@@ -1001,7 +1070,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
     try { return trip.returnProofUrls ? JSON.parse(trip.returnProofUrls) : [] } catch { return [] }
   })
   const returnFileRef = useRef<HTMLInputElement>(null)
-  const returnCameraRef = useRef<HTMLInputElement>(null)
+  const [showReturnCamera, setShowReturnCamera] = useState(false)
   const [showRejectForm, setShowRejectForm] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [rejectError, setRejectError] = useState('')
@@ -1266,13 +1335,18 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '6px' }}>Comprovantes de devolução</label>
                   <input ref={returnFileRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleReturnFileChange} />
-                  <input ref={returnCameraRef} type="file" accept="image/*" capture style={{ display: 'none' }} onChange={handleReturnFileChange} />
+                  {showReturnCamera && (
+                    <CameraModal
+                      onCapture={dataUrl => { setReturnProofUrls(prev => [...prev, dataUrl]); setShowReturnCamera(false) }}
+                      onClose={() => setShowReturnCamera(false)}
+                    />
+                  )}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => returnFileRef.current?.click()}
                       style={{ border: '1.5px solid #ef4444', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#fff', color: '#dc2626', cursor: 'pointer', flex: 1 }}>
                       📎 Arquivo / Galeria
                     </button>
-                    <button onClick={() => returnCameraRef.current?.click()}
+                    <button onClick={() => setShowReturnCamera(true)}
                       style={{ border: '1.5px solid #a5b4fc', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#f5f3ff', color: '#4f46e5', cursor: 'pointer', flex: 1 }}>
                       📷 Câmera
                     </button>
@@ -1898,7 +1972,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   const utils = trpc.useUtils()
   const today = new Date().toISOString().slice(0, 10)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const [showNewTripCamera, setShowNewTripCamera] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
 
   const tipos = costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
@@ -2018,7 +2092,12 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
       {/* ── Comprovantes ── */}
       <Field label="Comprovantes" hint="Aceita imagens e PDFs — pode adicionar mais de um ou tirar foto">
         <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleFiles} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture style={{ display: 'none' }} onChange={handleFiles} />
+        {showNewTripCamera && (
+          <CameraModal
+            onCapture={dataUrl => { setAttachments(prev => [...prev, dataUrl]); setShowNewTripCamera(false) }}
+            onClose={() => setShowNewTripCamera(false)}
+          />
+        )}
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -2026,7 +2105,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
             📎 Arquivo / Galeria
           </button>
           <button
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={() => setShowNewTripCamera(true)}
             style={{ padding: '9px 16px', borderRadius: '10px', border: '1.5px dashed #a5b4fc', background: '#f5f3ff', fontSize: '13px', fontWeight: '600', color: '#4f46e5', cursor: 'pointer', flex: 1, textAlign: 'center' }}>
             📷 Câmera
           </button>

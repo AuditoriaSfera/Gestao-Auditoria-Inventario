@@ -778,7 +778,9 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const totalGastoGeral = gastoExp.reduce((s: number, e: any) => s + Number(e.value), 0)
   const totalOrigGeral  = originalExp.reduce((s: number, e: any) => s + Number(e.value), 0)
 
-  const thSt: React.CSSProperties = { padding: '9px 12px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap', textAlign: 'left' }
+  const thSt: React.CSSProperties = { padding: '10px 12px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap', textAlign: 'left' }
+  const numTh: React.CSSProperties = { ...thSt, textAlign: 'right', width: '100px' }
+  const numTd: React.CSSProperties = { padding: '12px 12px', textAlign: 'right', verticalAlign: 'middle' }
 
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -797,9 +799,9 @@ function TabelaVerificacao({ trip }: { trip: any }) {
             <th style={{ ...thSt, width: '110px' }}>Data</th>
             <th style={{ ...thSt, width: '160px' }}>Solicitação</th>
             <th style={thSt}>Lançamentos de Gasto</th>
-            <th style={{ ...thSt, textAlign: 'right', width: '95px' }}>Adiantado</th>
-            <th style={{ ...thSt, textAlign: 'right', width: '95px' }}>Total Gasto</th>
-            <th style={{ ...thSt, textAlign: 'right', width: '95px' }}>Saldo</th>
+            <th style={numTh}>Adiantado</th>
+            <th style={numTh}>Total Gasto</th>
+            <th style={numTh}>Saldo</th>
           </tr>
         </thead>
         <tbody>
@@ -834,14 +836,14 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 
                   {/* ── Data ── */}
                   {isFirst && (
-                    <td rowSpan={rowCount} style={{ padding: '12px 10px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                    <td rowSpan={rowCount} style={{ padding: '12px 12px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                       <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
                       <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
                     </td>
                   )}
 
                   {/* ── Solicitação (centro de custo) ── */}
-                  <td style={{ padding: '10px 10px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                  <td style={{ padding: '12px 12px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
                     {orig ? (
                       <div style={{ padding: '5px 8px', background: matched ? '#dcfce7' : '#f1f5f9', borderRadius: '6px', border: `1px solid ${matched ? '#86efac' : '#e2e8f0'}` }}>
                         <div style={{ fontSize: '10px', fontWeight: '600', color: matched ? '#166534' : '#475569' }}>{orig.type}</div>
@@ -854,7 +856,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                   </td>
 
                   {/* ── Lançamentos deste centro de custo ── */}
-                  <td style={{ padding: '10px 12px', borderRight: '1px solid #e2e8f0', background: matched ? '#f0fdf4' : 'transparent' }}>
+                  <td style={{ padding: '12px 12px', borderRight: '1px solid #e2e8f0', background: matched ? '#f0fdf4' : 'transparent' }}>
                     {typeGastos.map((e: any) => {
                       const expId = e.id as string
                       const attachUrl = attachments[expId] || e.attachmentUrl || ''
@@ -944,15 +946,15 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                     const rowSaldoColor = rowSaldo > 0.01 ? '#15803d' : rowSaldo < -0.01 ? '#dc2626' : '#64748b'
                     const rowSaldoBg = rowSaldo > 0.01 ? '#f0fdf4' : rowSaldo < -0.01 ? '#fef2f2' : '#f8fafc'
                     return (<>
-                      <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(rowAdt)}</span>
+                      <td style={{ ...numTd, background: '#f8fafc', borderRight: '1px solid #e2e8f0' }}>
+                        <div style={{ fontWeight: '700', fontSize: '13px', color: '#6d28d9' }}>{formatCurrency(rowAdt)}</div>
                       </td>
-                      <td style={{ padding: '12px 10px', textAlign: 'right', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: '700', fontSize: '13px', color: rowGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(rowGst)}</span>
+                      <td style={{ ...numTd, background: '#f8fafc', borderRight: '1px solid #e2e8f0' }}>
+                        <div style={{ fontWeight: '700', fontSize: '13px', color: rowGst > 0 ? '#92400e' : '#94a3b8' }}>{formatCurrency(rowGst)}</div>
                       </td>
-                      <td style={{ padding: '12px 10px', textAlign: 'right', background: rowSaldoBg, verticalAlign: 'top' }}>
-                        <span style={{ fontWeight: '800', fontSize: '13px', color: rowSaldoColor }}>{rowSaldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(rowSaldo))}</span>
-                        <div style={{ fontSize: '9px', color: rowSaldoColor, marginTop: '2px', fontWeight: '600', opacity: 0.85 }}>{rowSaldo > 0.01 ? 'disponível' : rowSaldo < -0.01 ? 'a receber' : '✓ ok'}</div>
+                      <td style={{ ...numTd, background: rowSaldoBg }}>
+                        <div style={{ fontWeight: '800', fontSize: '13px', color: rowSaldoColor }}>{rowSaldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(rowSaldo))}</div>
+                        <div style={{ fontSize: '10px', color: rowSaldoColor, marginTop: '2px', fontWeight: '600' }}>{rowSaldo > 0.01 ? 'disponível' : rowSaldo < -0.01 ? 'a receber' : '✓ ok'}</div>
                       </td>
                     </>)
                   })()}
@@ -962,12 +964,12 @@ function TabelaVerificacao({ trip }: { trip: any }) {
           })}
         </tbody>
         <tfoot>
-          <tr style={{ background: '#e2e8f0' }}>
-            <td colSpan={3} style={{ padding: '11px 12px', fontWeight: '700', fontSize: '12px', color: '#374151', borderTop: '2px solid #cbd5e1' }}>TOTAL GERAL</td>
-            <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#6d28d9', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalOrigGeral)}</td>
-            <td style={{ padding: '11px 10px', textAlign: 'right', fontWeight: '900', fontSize: '15px', color: totalGastoGeral > 0 ? '#92400e' : '#94a3b8', borderTop: '2px solid #cbd5e1' }}>{formatCurrency(totalGastoGeral)}</td>
-            <td style={{ padding: '11px 10px', textAlign: 'right', borderTop: '2px solid #cbd5e1', background: (totalOrigGeral - totalGastoGeral) > 0.01 ? '#f0fdf4' : (totalOrigGeral - totalGastoGeral) < -0.01 ? '#fef2f2' : '#f8fafc' }}>
-              {(() => { const s = totalOrigGeral - totalGastoGeral; const c = s > 0.01 ? '#15803d' : s < -0.01 ? '#dc2626' : '#64748b'; return (<><span style={{ fontWeight: '900', fontSize: '15px', color: c }}>{s > 0.01 ? '+' : ''}{formatCurrency(Math.abs(s))}</span><div style={{ fontSize: '9px', color: c, fontWeight: '600', marginTop: '2px' }}>{s > 0.01 ? 'disponível' : s < -0.01 ? 'a receber' : '✓ ok'}</div></>) })()}
+          <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+            <td colSpan={3} style={{ padding: '12px 12px', fontWeight: '700', fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', borderTop: '2px solid #e2e8f0' }}>Total Geral</td>
+            <td style={{ ...numTd, fontWeight: '800', fontSize: '14px', color: '#6d28d9', borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>{formatCurrency(totalOrigGeral)}</td>
+            <td style={{ ...numTd, fontWeight: '800', fontSize: '14px', color: totalGastoGeral > 0 ? '#92400e' : '#94a3b8', borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>{formatCurrency(totalGastoGeral)}</td>
+            <td style={{ ...numTd, fontWeight: '800', fontSize: '14px', borderTop: '2px solid #e2e8f0', background: (totalOrigGeral - totalGastoGeral) > 0.01 ? '#f0fdf4' : (totalOrigGeral - totalGastoGeral) < -0.01 ? '#fef2f2' : '#f8fafc' }}>
+              {(() => { const s = totalOrigGeral - totalGastoGeral; const c = s > 0.01 ? '#15803d' : s < -0.01 ? '#dc2626' : '#64748b'; return (<><div style={{ fontWeight: '800', fontSize: '14px', color: c }}>{s > 0.01 ? '+' : ''}{formatCurrency(Math.abs(s))}</div><div style={{ fontSize: '10px', color: c, fontWeight: '600', marginTop: '2px' }}>{s > 0.01 ? 'disponível' : s < -0.01 ? 'a receber' : '✓ ok'}</div></>) })()}
             </td>
           </tr>
         </tfoot>

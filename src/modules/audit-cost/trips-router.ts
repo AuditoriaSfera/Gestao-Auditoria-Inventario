@@ -19,6 +19,8 @@ export const auditTripsRouter = createTRPCRouter({
       search: z.string().optional(),
       startDateFrom: z.date().optional(),
       startDateTo: z.date().optional(),
+      createdAtFrom: z.date().optional(),
+      createdAtTo: z.date().optional(),
       rejectedOnly: z.boolean().optional(),
       excludeRejected: z.boolean().optional(),
     }))
@@ -41,6 +43,10 @@ export const auditTripsRouter = createTRPCRouter({
         ...(input.startDateFrom || input.startDateTo ? { startDate: {
           ...(input.startDateFrom && { gte: input.startDateFrom }),
           ...(input.startDateTo   && { lte: input.startDateTo }),
+        }} : {}),
+        ...(input.createdAtFrom || input.createdAtTo ? { createdAt: {
+          ...(input.createdAtFrom && { gte: input.createdAtFrom }),
+          ...(input.createdAtTo   && { lte: input.createdAtTo }),
         }} : {}),
         ...(input.rejectedOnly    ? { rejectedAt: { not: null } } : {}),
         ...(input.excludeRejected ? { rejectedAt: null }          : {}),

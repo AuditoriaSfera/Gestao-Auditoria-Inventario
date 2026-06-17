@@ -1256,6 +1256,8 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
 function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   const [showNew, setShowNew] = useState(false)
   const [filterSearch, setFilterSearch] = useState('')
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState('')
+  const [filterCreatedTo, setFilterCreatedTo] = useState('')
   const [page, setPage] = useState(1)
   const [deleteTripId, setDeleteTripId] = useState<string | null>(null)
 
@@ -1263,6 +1265,8 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
     page, pageSize: 50,
     search: filterSearch || undefined,
+    createdAtFrom: filterCreatedFrom ? new Date(filterCreatedFrom) : undefined,
+    createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
   })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
@@ -1297,13 +1301,30 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
         </Modal>
       )}
 
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '16px' }}>
-        <input
-          placeholder="Pesquisar colaborador, viagem, loja..."
-          value={filterSearch}
-          onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
-          style={{ padding: '9px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '13px', minWidth: '280px', flex: 1 }}
-        />
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '16px', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 200px', minWidth: '180px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pesquisar</label>
+          <input
+            placeholder="Colaborador, viagem, loja..."
+            value={filterSearch}
+            onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado de</label>
+          <input type="date" value={filterCreatedFrom} onChange={e => { setFilterCreatedFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado até</label>
+          <input type="date" value={filterCreatedTo} onChange={e => { setFilterCreatedTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        {!!(filterSearch || filterCreatedFrom || filterCreatedTo) && (
+          <button onClick={() => { setFilterSearch(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setPage(1) }}
+            style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
+            ✕ Limpar
+          </button>
+        )}
         <Btn onClick={() => setShowNew(true)}>+ Nova Viagem (Adiantamento)</Btn>
       </div>
 
@@ -1318,6 +1339,7 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
                   <th style={thSt}>Colaborador</th>
                   <th style={thSt}>Destino / Lojas</th>
                   <th style={thSt}>Período</th>
+                  <th style={thSt}>Criado em</th>
                   <th style={thSt}>Status</th>
                   <th style={{ ...thSt, textAlign: 'right' }}></th>
                 </tr>
@@ -1343,6 +1365,9 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
                       <td style={tdSt}>
                         <div style={{ color: '#374151' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
                         {t.reason && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.reason}</div>}
+                      </td>
+                      <td style={tdSt}>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{t.createdAt ? new Date(t.createdAt).toLocaleDateString('pt-BR') : '—'}</div>
                       </td>
                       <td style={tdSt}>
                         <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: badgeBg, color: badgeColor }}>{badgeLabel}</span>
@@ -1381,6 +1406,8 @@ function AbaEmAndamento() {
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState('')
+  const [filterCreatedTo, setFilterCreatedTo] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'OPEN' | 'SUBMITTED' | 'REJECTED'>('')
   const [editTripId, setEditTripId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ reason: '', observations: '', status: 'OPEN' })
@@ -1401,6 +1428,8 @@ function AbaEmAndamento() {
     search: filterSearch || undefined,
     startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
     startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
+    createdAtFrom: filterCreatedFrom ? new Date(filterCreatedFrom) : undefined,
+    createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
     rejectedOnly: filterStatus === 'REJECTED' ? true : undefined,
     excludeRejected: filterStatus === 'OPEN' ? true : undefined,
   })
@@ -1545,8 +1574,16 @@ function AbaEmAndamento() {
               <option value="REJECTED">Rejeitada</option>
             </select>
           </div>
-          {!!(filterCollabs.length || filterSearch || filterFrom || filterTo || filterStatus) && (
-            <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setFilterStatus(''); setPage(1) }}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado de</label>
+            <input type="date" value={filterCreatedFrom} onChange={e => { setFilterCreatedFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado até</label>
+            <input type="date" value={filterCreatedTo} onChange={e => { setFilterCreatedTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+          </div>
+          {!!(filterCollabs.length || filterSearch || filterFrom || filterTo || filterStatus || filterCreatedFrom || filterCreatedTo) && (
+            <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setFilterStatus(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setPage(1) }}
               style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
               ✕ Limpar
             </button>
@@ -1583,6 +1620,7 @@ function AbaEmAndamento() {
                         </div>
                         <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📅 {formatDate(g.startDate)} → {formatDate(g.endDate)}{g.reason && <span> · {g.reason}</span>}</div>
                         {g.stores && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{g.stores}</div>}
+                        {g.trips[0]?.createdAt && <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>Criado em: {new Date(g.trips[0].createdAt).toLocaleDateString('pt-BR')}</div>}
                       </div>
                       <div style={{ textAlign: 'right', minWidth: '130px' }}>
                         <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{formatCurrency(totalSpent)}</div>
@@ -1676,6 +1714,8 @@ function AbaConcluidas() {
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState('')
+  const [filterCreatedTo, setFilterCreatedTo] = useState('')
   const [prestacaoTripId, setPrestacaoTripId] = useState<string | null>(null)
 
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
@@ -1684,12 +1724,14 @@ function AbaConcluidas() {
     search: filterSearch || undefined,
     startDateFrom: filterFrom ? new Date(filterFrom) : undefined,
     startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
+    createdAtFrom: filterCreatedFrom ? new Date(filterCreatedFrom) : undefined,
+    createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
   })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
 
   const trips = data?.trips ?? []
-  const hasFilters = filterCollabs.length || filterSearch || filterFrom || filterTo
+  const hasFilters = filterCollabs.length || filterSearch || filterFrom || filterTo || filterCreatedFrom || filterCreatedTo
 
   return (
     <>
@@ -1717,8 +1759,16 @@ function AbaConcluidas() {
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Até</label>
           <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
         </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado de</label>
+          <input type="date" value={filterCreatedFrom} onChange={e => { setFilterCreatedFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado até</label>
+          <input type="date" value={filterCreatedTo} onChange={e => { setFilterCreatedTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
         {!!hasFilters && (
-          <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+          <button onClick={() => { setFilterCollabs([]); setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setPage(1) }}
             style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
             ✕ Limpar
           </button>
@@ -1742,6 +1792,7 @@ function AbaConcluidas() {
                       </div>
                       <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{t.reason && <span>{t.reason}</span>}{t.stores && <span> · {t.stores}</span>}</div>
                       <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
+                      {t.createdAt && <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>Criado em: {new Date(t.createdAt).toLocaleDateString('pt-BR')}</div>}
                     </div>
                     <div style={{ textAlign: 'right', minWidth: '130px' }}>
                       <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{formatCurrency(Number(t.spentAmount ?? 0))}</div>

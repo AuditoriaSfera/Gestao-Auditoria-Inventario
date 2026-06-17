@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, EmptyState } from '@/components/shared/module-page'
 import { formatCurrency } from '@/lib/utils'
@@ -486,6 +487,7 @@ export default function AuditDashboardPage() {
   const [selectedCollabs, setSelectedCollabs] = useState<string[]>([])
   const [filterTipoTime, setFilterTipoTime] = useState<'' | 'campo' | 'administrativo'>('')
   const [detailCard, setDetailCard] = useState<DetailCard | null>(null)
+  const [chartTip, setChartTip] = useState<{ x: number; y: number; lines: string[] } | null>(null)
 
   const { data: availablePeriods } = trpc.auditTrips.listAvailablePeriods.useQuery()
 
@@ -912,7 +914,24 @@ export default function AuditDashboardPage() {
                   const bx = Math.max(PAD.left, Math.min(x - BOX_W / 2, PAD.left + iW - BOX_W))
                   const by = Math.max(2, y - BOX_H - 10)
                   return (
-                    <g key={`lbl-${i}`}>
+                    <g key={`lbl-${i}`}
+                      style={{ cursor: 'default' }}
+                      onMouseEnter={e => {
+                        const rect = (e.currentTarget.closest('svg') as SVGElement).getBoundingClientRect()
+                        setChartTip({
+                          x: rect.left + x,
+                          y: rect.top + by - 8,
+                          lines: [
+                            `📅 ${byMonth[i].label}`,
+                            `💰 Total do mês: ${valStr.replace('R$', 'R$ ')}`,
+                            `📊 ${pct}% do total do período`,
+                            `(período = ${fmtCompact(grandTotal).replace('R$', 'R$ ')})`,
+                          ],
+                        })
+                      }}
+                      onMouseLeave={() => setChartTip(null)}
+                    >
+                      <rect x={bx - 4} y={by - 4} width={BOX_W + 8} height={BOX_H + 8} rx={8} fill="transparent" />
                       <line x1={x} y1={by + BOX_H} x2={x} y2={y - 5} stroke="#0f172a" strokeWidth="1" strokeDasharray="2 2" opacity={0.35} />
                       <rect x={bx} y={by} width={BOX_W} height={BOX_H} rx={5} fill="#0f172a" opacity={0.88} />
                       <text x={bx + BOX_W / 2} y={by + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">{pct}% do total</text>
@@ -1082,6 +1101,35 @@ export default function AuditDashboardPage() {
         </ClickableCard>
 
       </div>
+
+      {/* Tooltip do gráfico */}
+      {chartTip && typeof document !== 'undefined' && createPortal(
+        <div style={{
+          position: 'fixed',
+          left: chartTip.x,
+          top: chartTip.y,
+          transform: 'translate(-50%, -100%)',
+          background: '#1e293b',
+          color: 'white',
+          borderRadius: '10px',
+          padding: '10px 14px',
+          pointerEvents: 'none',
+          zIndex: 99999,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+          minWidth: '200px',
+        }}>
+          {chartTip.lines.map((line, i) => (
+            <div key={i} style={{
+              fontSize: i === 0 ? '12px' : i === 3 ? '10px' : '13px',
+              fontWeight: i === 1 ? '800' : i === 0 ? '700' : '400',
+              color: i === 3 ? '#94a3b8' : i === 2 ? '#60a5fa' : 'white',
+              marginBottom: i < chartTip.lines.length - 1 ? '3px' : 0,
+            }}>{line}</div>
+          ))}
+          <div style={{ position: 'absolute', bottom: '-6px', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1e293b' }} />
+        </div>,
+        document.body
+      )}
     </ModulePage>
   )
 }

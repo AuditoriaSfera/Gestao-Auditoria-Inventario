@@ -179,7 +179,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   const label = selected.length === 0 ? null : allSelected ? `Todas (${options.length})` : selected.length > 1 ? `${selected.length} lojas` : selected[0]
   return (
     <div style={{ position: 'relative' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '36px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', minWidth: '210px', justifyContent: 'space-between' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '36px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', minWidth: '280px', justifyContent: 'space-between' }}>
         <span style={{ fontSize: '12px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? '—'}</span>
         <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '4px' }}>{open ? '▲' : '▼'}</span>
       </div>
@@ -245,7 +245,7 @@ function TabelaDiaria({
           <tr>
             <th style={thSt}>Data</th>
             <th style={thSt}>Dia</th>
-            <th style={{ ...thSt, minWidth: '220px' }}>Loja do dia</th>
+            <th style={{ ...thSt, minWidth: '290px' }}>Loja do dia</th>
             {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right', minWidth: '120px' }}>{t}</th>)}
             <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
           </tr>
@@ -268,7 +268,7 @@ function TabelaDiaria({
                       onChange={e => setValue(d, t, e.target.value)}
                       placeholder="—"
                       inputMode="decimal"
-                      style={{ ...inpSm, textAlign: 'right', width: '110px' }}
+                      style={{ ...inpSm, textAlign: 'right', width: '130px' }}
                     />
                   </td>
                 ))}
@@ -815,7 +815,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                       return (
                         <div key={expId} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 0', borderBottom: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
                           <input type="file" accept="image/*,application/pdf" id={fileInputId} style={{ display: 'none' }} onChange={handleExpFile} />
-                          <input type="file" accept="image/*" capture="environment" id={cameraInputId} style={{ display: 'none' }} onChange={handleExpFile} />
+                          <input type="file" accept="image/*" capture id={cameraInputId} style={{ display: 'none' }} onChange={handleExpFile} />
                           <span style={{ fontWeight: '800', fontSize: '13px', color: '#0f172a', flexShrink: 0 }}>
                             R$ {Number(e.value).toFixed(2).replace('.', ',')}
                           </span>
@@ -1201,7 +1201,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
                 <div>
                   <label style={{ fontSize: '11px', fontWeight: '600', color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '6px' }}>Comprovantes de devolução</label>
                   <input ref={returnFileRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleReturnFileChange} />
-                  <input ref={returnCameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleReturnFileChange} />
+                  <input ref={returnCameraRef} type="file" accept="image/*" capture style={{ display: 'none' }} onChange={handleReturnFileChange} />
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => returnFileRef.current?.click()}
                       style={{ border: '1.5px solid #ef4444', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#fff', color: '#dc2626', cursor: 'pointer', flex: 1 }}>
@@ -1953,7 +1953,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
       {/* ── Comprovantes ── */}
       <Field label="Comprovantes" hint="Aceita imagens e PDFs — pode adicionar mais de um ou tirar foto">
         <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleFiles} />
-        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleFiles} />
+        <input ref={cameraInputRef} type="file" accept="image/*" capture style={{ display: 'none' }} onChange={handleFiles} />
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => fileInputRef.current?.click()}

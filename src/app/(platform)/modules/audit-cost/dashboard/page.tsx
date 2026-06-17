@@ -839,9 +839,9 @@ export default function AuditDashboardPage() {
 
       {/* Card Custo por Mês — gráfico de linhas */}
       {byMonth.length > 0 && (() => {
-        const W = Math.max(byMonth.length * 90, 400)
-        const H = 180
-        const PAD = { top: 36, right: 24, bottom: 36, left: 60 }
+        const W = Math.max(byMonth.length * 110, 400)
+        const H = 210
+        const PAD = { top: 56, right: 30, bottom: 36, left: 60 }
         const iW = W - PAD.left - PAD.right
         const iH = H - PAD.top - PAD.bottom
         const xStep = byMonth.length > 1 ? iW / (byMonth.length - 1) : iW / 2
@@ -877,9 +877,12 @@ export default function AuditDashboardPage() {
         // Y axis labels
         const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ v: maxMonthVal * f, y: toY(maxMonthVal * f) }))
 
-        // % de cada mês sobre o total geral
+        // Labels de % e valor real acima de cada ponto do total
         const grandTotal = byMonth.reduce((acc, m) => acc + m.total, 0)
         const totalPts = pts('total')
+        const fmtCompact = (v: number) => v >= 1000 ? `R$${(v/1000).toFixed(1)}k` : `R$${v.toFixed(0)}`
+        const BOX_W = 62
+        const BOX_H = 32
 
         return (
           <DataCard title="Custo por Mês">
@@ -897,17 +900,23 @@ export default function AuditDashboardPage() {
                 {/* areas + lines */}
                 {area('expTotal', '#3b82f6', '#3b82f6')}
                 {area('salTotal', '#8b5cf6', '#8b5cf6')}
-                {/* total line */}
+                {/* total line + dots */}
                 <polyline points={polyline('total')} fill="none" stroke="#0f172a" strokeWidth="2" strokeDasharray="5 3" strokeLinejoin="round" />
-                {/* % labels above each total point */}
+                {totalPts.map(([x, y]) => (
+                  <circle key={`dot-${x}`} cx={x} cy={y} r={4} fill="#0f172a" stroke="white" strokeWidth="1.5" />
+                ))}
+                {/* label boxes: % + valor real */}
                 {totalPts.map(([x, y], i) => {
                   const pct = grandTotal > 0 ? Math.round((byMonth[i].total / grandTotal) * 100) : 0
+                  const valStr = fmtCompact(byMonth[i].total)
+                  const bx = Math.max(PAD.left, Math.min(x - BOX_W / 2, PAD.left + iW - BOX_W))
+                  const by = Math.max(2, y - BOX_H - 10)
                   return (
-                    <g key={`pct-${i}`}>
-                      <rect x={x - 16} y={y - 22} width={32} height={16} rx={4} fill="#0f172a" opacity={0.82} />
-                      <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fontWeight="700" fill="white">
-                        {pct}%
-                      </text>
+                    <g key={`lbl-${i}`}>
+                      <line x1={x} y1={by + BOX_H} x2={x} y2={y - 5} stroke="#0f172a" strokeWidth="1" strokeDasharray="2 2" opacity={0.35} />
+                      <rect x={bx} y={by} width={BOX_W} height={BOX_H} rx={5} fill="#0f172a" opacity={0.88} />
+                      <text x={bx + BOX_W / 2} y={by + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">{pct}% do total</text>
+                      <text x={bx + BOX_W / 2} y={by + 25} textAnchor="middle" fontSize="11" fontWeight="800" fill="white">{valStr}</text>
                     </g>
                   )
                 })}

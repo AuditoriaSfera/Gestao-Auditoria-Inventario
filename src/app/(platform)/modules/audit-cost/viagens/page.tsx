@@ -1395,6 +1395,8 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
 function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   const [showNew, setShowNew] = useState(false)
   const [filterSearch, setFilterSearch] = useState('')
+  const [filterPeriodFrom, setFilterPeriodFrom] = useState('')
+  const [filterPeriodTo, setFilterPeriodTo] = useState('')
   const [filterCreatedFrom, setFilterCreatedFrom] = useState('')
   const [filterCreatedTo, setFilterCreatedTo] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'OPEN' | 'SUBMITTED' | 'REJECTED' | 'CLOSED'>('')
@@ -1405,6 +1407,8 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
     page, pageSize: 50,
     search: filterSearch || undefined,
+    startDateFrom: filterPeriodFrom ? new Date(filterPeriodFrom) : undefined,
+    startDateTo: filterPeriodTo ? new Date(filterPeriodTo + 'T23:59:59') : undefined,
     createdAtFrom: filterCreatedFrom ? new Date(filterCreatedFrom) : undefined,
     createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
     status: (filterStatus === 'CLOSED' || filterStatus === 'SUBMITTED') ? filterStatus : filterStatus === 'OPEN' ? 'OPEN' : filterStatus === 'REJECTED' ? 'OPEN' : undefined,
@@ -1455,11 +1459,19 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
           />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado de</label>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Período de</label>
+          <input type="date" value={filterPeriodFrom} onChange={e => { setFilterPeriodFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Período até</label>
+          <input type="date" value={filterPeriodTo} onChange={e => { setFilterPeriodTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cadastrado de</label>
           <input type="date" value={filterCreatedFrom} onChange={e => { setFilterCreatedFrom(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado até</label>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cadastrado até</label>
           <input type="date" value={filterCreatedTo} onChange={e => { setFilterCreatedTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1472,8 +1484,8 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
             <option value="CLOSED">Concluída</option>
           </select>
         </div>
-        {!!(filterSearch || filterCreatedFrom || filterCreatedTo || filterStatus) && (
-          <button onClick={() => { setFilterSearch(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setFilterStatus(''); setPage(1) }}
+        {!!(filterSearch || filterPeriodFrom || filterPeriodTo || filterCreatedFrom || filterCreatedTo || filterStatus) && (
+          <button onClick={() => { setFilterSearch(''); setFilterPeriodFrom(''); setFilterPeriodTo(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setFilterStatus(''); setPage(1) }}
             style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
             ✕ Limpar
           </button>

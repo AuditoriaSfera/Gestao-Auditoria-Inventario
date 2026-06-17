@@ -346,6 +346,48 @@ export default function AuditDashboardPage() {
       .slice(0, 10)
   }, [monthExpenses, tripsInPeriod])
 
+  // ── Custo por mês (histórico de todos os períodos disponíveis) ──────────────
+  const byMonth = useMemo(() => {
+    if (!availablePeriods?.length) return []
+    const allExp: any[] = expenses?.expenses ?? []
+    return [...availablePeriods]
+      .slice()
+      .reverse() // ordem cronológica (mais antigo → mais recente)
+      .map(p => {
+        const periodStart = new Date(p.year, p.month - 1, 1)
+        const periodEnd   = new Date(p.year, p.month, 0, 23, 59, 59)
+
+        // despesas de viagem do mês
+        const expTotal = allExp
+          .filter(e => {
+            const d = new Date(e.date)
+            return d.getFullYear() === p.year && d.getMonth() + 1 === p.month
+          })
+          .reduce((s, e) => s + Number(e.value), 0)
+
+        // custo de pessoal do mês (1 registro mais recente por colaborador)
+        const seen = new Set<string>()
+        let salTotal = 0
+        const sorted = [...allSalaries]
+          .filter(s => s.deletedAt == null && s.status === 'ACTIVE')
+          .filter(s => {
+            const vi = new Date(s.vigenciaInicio)
+            const vf = s.vigenciaFim ? new Date(s.vigenciaFim) : null
+            return vi <= periodEnd && (vf == null || vf >= periodStart)
+          })
+          .sort((a, b) => new Date(b.vigenciaInicio).getTime() - new Date(a.vigenciaInicio).getTime())
+        for (const s of sorted) {
+          if (seen.has(s.collaboratorId)) continue
+          seen.add(s.collaboratorId)
+          salTotal += Number(s.salarioBase) + Number(s.encargos)
+        }
+
+        return { label: p.label, expTotal, salTotal, total: expTotal + salTotal }
+      })
+  }, [availablePeriods, expenses, allSalaries])
+
+  const maxMonthVal = Math.max(...byMonth.map(m => m.total), 1)
+
   const maxBarVal = Math.max(...byCollaborator.map(c => c.total), 1)
   const maxCcVal = Math.max(...byCostCenter.map(c => c.value), 1)
   const maxPayVal = Math.max(...byPayment.map(c => c.value), 1)
@@ -386,6 +428,50 @@ export default function AuditDashboardPage() {
         <KpiCard icon="📊" label="Custo Médio / Inventário"  value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
         <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
       </div>
+
+      {/* Card Custo por Mês — largura total */}
+      {byMonth.length > 0 && (
+        <DataCard title="Custo por Mês">
+          <div style={{ overflowX: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', minWidth: `${byMonth.length * 72}px`, padding: '8px 4px 0' }}>
+              {byMonth.map(m => {
+                const expH  = Math.round((m.expTotal / maxMonthVal) * 140)
+                const salH  = Math.round((m.salTotal / maxMonthVal) * 140)
+                const isSelected = selectedPeriods.some(pk => {
+                  const [y, mo] = pk.split('-').map(Number)
+                  return m.label === `${MONTHS[mo - 1]}/${String(y).slice(2)}`
+                })
+                return (
+                  <div key={m.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '60px' }}>
+                    <div style={{ fontSize: '10px', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap' }}>{formatCurrency(m.total)}</div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '140px' }}>
+                      {m.expTotal > 0 && (
+                        <div title={`Viagens: ${formatCurrency(m.expTotal)}`}
+                          style={{ width: '22px', height: `${expH}px`, background: '#3b82f6', borderRadius: '4px 4px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                      )}
+                      {m.salTotal > 0 && (
+                        <div title={`Pessoal: ${formatCurrency(m.salTotal)}`}
+                          style={{ width: '22px', height: `${salH}px`, background: '#8b5cf6', borderRadius: '4px 4px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: isSelected ? '#2563eb' : '#64748b', fontWeight: isSelected ? '700' : '500', whiteSpace: 'nowrap' }}>{m.label}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: '16px', marginTop: '10px', paddingLeft: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
+                <div style={{ width: '12px', height: '12px', background: '#3b82f6', borderRadius: '2px' }} />
+                Despesas de Viagem
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
+                <div style={{ width: '12px', height: '12px', background: '#8b5cf6', borderRadius: '2px' }} />
+                Custo de Pessoal
+              </div>
+            </div>
+          </div>
+        </DataCard>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
 

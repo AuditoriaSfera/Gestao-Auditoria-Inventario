@@ -837,14 +837,14 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 
                   {/* ── Data ── */}
                   {isFirst && (
-                    <td rowSpan={rowCount} style={{ padding: '12px 12px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                    <td rowSpan={rowCount} style={{ padding: '12px 12px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle', textAlign: 'center' }}>
                       <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
-                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
                     </td>
                   )}
 
                   {/* ── Solicitação (centro de custo) ── */}
-                  <td style={{ padding: '12px 12px', borderRight: '1px solid #e2e8f0', verticalAlign: 'top' }}>
+                  <td style={{ padding: '12px 12px', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle', textAlign: 'center' }}>
                     {orig ? (
                       <div style={{ padding: '5px 8px', background: matched ? '#dcfce7' : '#f1f5f9', borderRadius: '6px', border: `1px solid ${matched ? '#86efac' : '#e2e8f0'}` }}>
                         <div style={{ fontSize: '10px', fontWeight: '600', color: matched ? '#166534' : '#475569' }}>{orig.type}</div>

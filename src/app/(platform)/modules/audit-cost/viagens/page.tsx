@@ -827,7 +827,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                           <button
                             onClick={() => { (document.getElementById(cameraInputId) as HTMLInputElement)?.click() }}
                             style={{ padding: '3px 9px', borderRadius: '6px', border: '1.5px solid #a5b4fc', background: '#f5f3ff', cursor: 'pointer', fontSize: '11px', fontWeight: '700', color: '#4f46e5', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                            📷 Foto
+                            📷 Câmera
                           </button>
                           {isImg && (
                             <img
@@ -1209,7 +1209,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
                     </button>
                     <button onClick={() => returnCameraRef.current?.click()}
                       style={{ border: '1.5px solid #a5b4fc', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', fontWeight: '600', background: '#f5f3ff', color: '#4f46e5', cursor: 'pointer', flex: 1 }}>
-                      📷 Tirar foto
+                      📷 Câmera
                     </button>
                   </div>
                   {returnProofUrls.length > 0 && (
@@ -1963,7 +1963,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
           <button
             onClick={() => cameraInputRef.current?.click()}
             style={{ padding: '9px 16px', borderRadius: '10px', border: '1.5px dashed #a5b4fc', background: '#f5f3ff', fontSize: '13px', fontWeight: '600', color: '#4f46e5', cursor: 'pointer', flex: 1, textAlign: 'center' }}>
-            📷 Tirar foto
+            📷 Câmera
           </button>
         </div>
         {attachments.length > 0 && (

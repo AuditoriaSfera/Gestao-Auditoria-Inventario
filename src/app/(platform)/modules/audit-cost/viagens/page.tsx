@@ -179,7 +179,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   const label = selected.length === 0 ? null : allSelected ? `Todas (${options.length})` : selected.length > 1 ? `${selected.length} lojas` : selected[0]
   return (
     <div style={{ position: 'relative' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '30px', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', minWidth: '140px', justifyContent: 'space-between' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '36px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', minWidth: '210px', justifyContent: 'space-between' }}>
         <span style={{ fontSize: '12px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? '—'}</span>
         <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '4px' }}>{open ? '▲' : '▼'}</span>
       </div>
@@ -245,8 +245,8 @@ function TabelaDiaria({
           <tr>
             <th style={thSt}>Data</th>
             <th style={thSt}>Dia</th>
-            <th style={{ ...thSt, minWidth: '160px' }}>Loja do dia</th>
-            {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right', minWidth: '90px' }}>{t}</th>)}
+            <th style={{ ...thSt, minWidth: '220px' }}>Loja do dia</th>
+            {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right', minWidth: '120px' }}>{t}</th>)}
             <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
           </tr>
         </thead>
@@ -268,7 +268,7 @@ function TabelaDiaria({
                       onChange={e => setValue(d, t, e.target.value)}
                       placeholder="—"
                       inputMode="decimal"
-                      style={{ ...inpSm, textAlign: 'right', width: '80px' }}
+                      style={{ ...inpSm, textAlign: 'right', width: '110px' }}
                     />
                   </td>
                 ))}

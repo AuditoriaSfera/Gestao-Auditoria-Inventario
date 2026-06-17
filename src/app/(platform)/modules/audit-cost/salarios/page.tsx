@@ -101,7 +101,9 @@ function SalarioModal({
 }) {
   const isEdit = !!initial?.id
 
-  const [collaboratorId, setCollaboratorId] = useState(initial?.collaboratorId ?? '')
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>(
+    initial?.collaboratorId ? [initial.collaboratorId] : []
+  )
   const [cargo, setCargo] = useState(initial?.cargo ?? '')
   const [salarioBase, setSalarioBase] = useState(
     initial?.salarioBase != null ? String(Number(initial.salarioBase)) : ''
@@ -127,7 +129,7 @@ function SalarioModal({
 
   async function handleSave() {
     setError('')
-    if (!collaboratorId) return setError('Selecione um colaborador.')
+    if (collaboratorIds.length === 0) return setError('Selecione ao menos um colaborador.')
     if (!salarioBase || salNum <= 0) return setError('Informe o salário base.')
     if (!vigenciaInicio) return setError('Informe o início da vigência.')
 
@@ -143,15 +145,17 @@ function SalarioModal({
           observacao: observacao || null,
         })
       } else {
-        await createMut.mutateAsync({
-          collaboratorId,
-          cargo: cargo || undefined,
-          salarioBase: salNum,
-          encargos: encNum,
-          vigenciaInicio: new Date(vigenciaInicio + 'T12:00:00'),
-          vigenciaFim: vigenciaFim ? new Date(vigenciaFim + 'T12:00:00') : undefined,
-          observacao: observacao || undefined,
-        })
+        for (const collaboratorId of collaboratorIds) {
+          await createMut.mutateAsync({
+            collaboratorId,
+            cargo: cargo || undefined,
+            salarioBase: salNum,
+            encargos: encNum,
+            vigenciaInicio: new Date(vigenciaInicio + 'T12:00:00'),
+            vigenciaFim: vigenciaFim ? new Date(vigenciaFim + 'T12:00:00') : undefined,
+            observacao: observacao || undefined,
+          })
+        }
       }
       onSaved()
       onClose()
@@ -161,6 +165,11 @@ function SalarioModal({
   }
 
   const loading = createMut.isPending || updateMut.isPending
+
+  const collabOptions = collaborators.map((c: any) => ({
+    value: c.id,
+    label: c.name + (c.role ? ` — ${c.role}` : '')
+  }))
 
   return (
     <div
@@ -176,16 +185,16 @@ function SalarioModal({
         </div>
 
         <div style={{ display: 'grid', gap: '14px' }}>
-          {/* Colaborador */}
+          {/* Colaborador(es) */}
           {!isEdit && (
             <div>
-              <label style={labelStyle}>Colaborador *</label>
-              <select value={collaboratorId} onChange={e => setCollaboratorId(e.target.value)} style={inputStyle}>
-                <option value="">Selecione...</option>
-                {collaborators.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.name}{c.role ? ` — ${c.role}` : ''}</option>
-                ))}
-              </select>
+              <label style={labelStyle}>Colaboradores *</label>
+              <MultiSelectDropdown
+                options={collabOptions}
+                selected={collaboratorIds}
+                onChange={setCollaboratorIds}
+                placeholder="Selecione um ou mais colaboradores"
+              />
             </div>
           )}
 

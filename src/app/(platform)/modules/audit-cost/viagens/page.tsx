@@ -231,68 +231,55 @@ function TabelaDiaria({
   }
   if (!dates.length) return <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Defina as datas da viagem para preencher a tabela.</div>
 
-  const thSt: React.CSSProperties = { padding: '8px 8px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'normal', lineHeight: '1.3', verticalAlign: 'bottom' }
-  const tdSt: React.CSSProperties = { padding: '6px 6px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' }
-
   const totaisPorTipo: Record<string, number> = {}
   for (const tipo of tipos) totaisPorTipo[tipo] = 0
   for (const d of dates) for (const tipo of tipos) totaisPorTipo[tipo] += parseMoney(rows[d]?.values?.[tipo] ?? '')
+  const totalGeral = Object.values(totaisPorTipo).reduce((a, b) => a + b, 0)
 
   return (
-    <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-        <thead>
-          <tr>
-            <th style={thSt}>Data</th>
-            <th style={thSt}>Dia</th>
-            <th style={{ ...thSt, minWidth: '180px', maxWidth: '220px' }}>Loja do dia</th>
-            {tipos.map(t => <th key={t} style={{ ...thSt, textAlign: 'right', minWidth: '85px', maxWidth: '100px' }}>{t}</th>)}
-            <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dates.map(d => {
-            const row = rows[d] ?? { storeNames: [], values: {} }
-            const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
-            return (
-              <tr key={d}>
-                <td style={{ ...tdSt, fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>{fmtDate(d)}</td>
-                <td style={{ ...tdSt, color: '#64748b', whiteSpace: 'nowrap', fontSize: '12px' }}>{diaSemana(d)}</td>
-                <td style={tdSt}>
-                  <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
-                </td>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {dates.map(d => {
+        const row = rows[d] ?? { storeNames: [], values: {} }
+        const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
+        return (
+          <div key={d} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
+            <div style={{ background: '#f8fafc', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontWeight: '700', fontSize: '13px', color: '#0f172a' }}>{fmtDate(d)}</span>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>{diaSemana(d)}</span>
+              </div>
+              <span style={{ fontWeight: '700', fontSize: '13px', color: total > 0 ? '#1e40af' : '#cbd5e1' }}>
+                {total > 0 ? formatCurrency(total) : '—'}
+              </span>
+            </div>
+            <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Loja do dia</div>
+                <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 {tipos.map(t => (
-                  <td key={t} style={{ ...tdSt, textAlign: 'right' }}>
+                  <div key={t}>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '3px' }}>{t}</div>
                     <input
                       value={row.values?.[t] ?? ''}
                       onChange={e => setValue(d, t, e.target.value)}
-                      placeholder="—"
+                      placeholder="0,00"
                       inputMode="decimal"
-                      style={{ ...inpSm, textAlign: 'right', width: '80px' }}
+                      style={{ ...inpSm, textAlign: 'right', width: '100%', boxSizing: 'border-box' as const }}
                     />
-                  </td>
+                  </div>
                 ))}
-                <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: total > 0 ? '#1e40af' : '#cbd5e1', whiteSpace: 'nowrap' }}>
-                  {total > 0 ? formatCurrency(total) : '—'}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr style={{ background: '#f8fafc' }}>
-            <td colSpan={3} style={{ ...tdSt, fontWeight: '700', borderTop: '2px solid #e2e8f0' }}>Total</td>
-            {tipos.map(t => (
-              <td key={t} style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: '#1e40af', borderTop: '2px solid #e2e8f0' }}>
-                {totaisPorTipo[t] > 0 ? formatCurrency(totaisPorTipo[t]) : '—'}
-              </td>
-            ))}
-            <td style={{ ...tdSt, textAlign: 'right', fontWeight: '900', color: '#0f172a', borderTop: '2px solid #e2e8f0' }}>
-              {formatCurrency(Object.values(totaisPorTipo).reduce((a, b) => a + b, 0))}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+      {totalGeral > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+          <span style={{ fontWeight: '900', fontSize: '14px', color: '#0f172a' }}>Total geral: {formatCurrency(totalGeral)}</span>
+        </div>
+      )}
     </div>
   )
 }

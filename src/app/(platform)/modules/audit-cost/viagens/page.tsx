@@ -106,6 +106,7 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
           <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedIds.length} loja(s)</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button onClick={() => onChange(stores.map(s => s.id))} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
               {selectedIds.length > 0 && (
                 <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
               )}

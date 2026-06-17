@@ -239,13 +239,12 @@ export default function AuditDashboardPage() {
   // ── Custo de pessoal (salários + encargos, 1x por colaborador por mês) ───────
   const allSalaries: any[] = salariesData?.items ?? []
   const personnelCostByCollab = useMemo(() => {
-    const result = new Map<string, { name: string; total: number }>()
+    const result = new Map<string, { name: string; total: number; tipoTime: string }>()
     for (const pk of selectedPeriods) {
       const [y, m] = pk.split('-').map(Number)
       const periodStart = new Date(y, m - 1, 1)
       const periodEnd   = new Date(y, m, 0, 23, 59, 59)
       const seen = new Set<string>()
-      // Sort by vigenciaInicio desc to pick most recent per collaborator
       const sorted = [...allSalaries]
         .filter(s => s.deletedAt == null && s.status === 'ACTIVE')
         .filter(s => {
@@ -260,8 +259,9 @@ export default function AuditDashboardPage() {
         if (selectedCollabs.length > 0 && !selectedCollabs.includes(s.collaboratorId)) continue
         const name = s.collaborator?.name ?? s.collaboratorId.slice(0, 8)
         const cost = Number(s.salarioBase) + Number(s.encargos)
-        const prev = result.get(s.collaboratorId) ?? { name, total: 0 }
-        result.set(s.collaboratorId, { name, total: prev.total + cost })
+        const tipoTime = s.tipoTime ?? 'campo'
+        const prev = result.get(s.collaboratorId) ?? { name, total: 0, tipoTime }
+        result.set(s.collaboratorId, { name, total: prev.total + cost, tipoTime })
       }
     }
     return Array.from(result.values()).sort((a, b) => b.total - a.total)
@@ -269,6 +269,14 @@ export default function AuditDashboardPage() {
 
   const totalPersonnelCost = useMemo(
     () => personnelCostByCollab.reduce((s, c) => s + c.total, 0),
+    [personnelCostByCollab]
+  )
+  const totalCampoCost = useMemo(
+    () => personnelCostByCollab.filter(c => c.tipoTime === 'campo').reduce((s, c) => s + c.total, 0),
+    [personnelCostByCollab]
+  )
+  const totalAdmCost = useMemo(
+    () => personnelCostByCollab.filter(c => c.tipoTime === 'administrativo').reduce((s, c) => s + c.total, 0),
     [personnelCostByCollab]
   )
   const totalOperationCost = totalMonthExpenses + totalPersonnelCost
@@ -368,6 +376,8 @@ export default function AuditDashboardPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
         <KpiCard icon="💰" label="Despesas de Viagem"        value={formatCurrency(totalMonthExpenses)} />
         <KpiCard icon="👤" label="Custo de Pessoal"          value={formatCurrency(totalPersonnelCost)} sub={`${personnelCostByCollab.length} colaborador(es)`} />
+        <KpiCard icon="🏃" label="Time de Campo"             value={formatCurrency(totalCampoCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'campo').length} colab.`} />
+        <KpiCard icon="🖥️" label="Administrativo"            value={formatCurrency(totalAdmCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'administrativo').length} colab.`} />
         <KpiCard icon="🏦" label="Custo Total Operação"      value={formatCurrency(totalOperationCost)} color="#2563eb" />
         <KpiCard icon="📅" label="Dias em Viagem"            value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
         <KpiCard icon="👥" label="Colaboradores"             value={String(uniqueCollabsInPeriod)} sub="no período" />
@@ -468,9 +478,24 @@ export default function AuditDashboardPage() {
             <EmptyState icon="👤" title="Sem dados" description="Nenhum salário ativo no período." />
           ) : (() => {
               const maxPerson = Math.max(...personnelCostByCollab.map(c => c.total), 1)
-              return personnelCostByCollab.map((c, i) => (
-                <Bar key={c.name} label={c.name} value={c.total} max={maxPerson} color="#8b5cf6" />
-              ))
+              const campo = personnelCostByCollab.filter(c => c.tipoTime === 'campo')
+              const adm   = personnelCostByCollab.filter(c => c.tipoTime === 'administrativo')
+              return (
+                <>
+                  {campo.length > 0 && (
+                    <>
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', marginTop: '4px' }}>🏃 Time de Campo</div>
+                      {campo.map(c => <Bar key={c.name} label={c.name} value={c.total} max={maxPerson} color="#0ea5e9" />)}
+                    </>
+                  )}
+                  {adm.length > 0 && (
+                    <>
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px', marginTop: campo.length > 0 ? '14px' : '4px' }}>🖥️ Administrativo</div>
+                      {adm.map(c => <Bar key={c.name} label={c.name} value={c.total} max={maxPerson} color="#8b5cf6" />)}
+                    </>
+                  )}
+                </>
+              )
             })()
           }
         </DataCard>

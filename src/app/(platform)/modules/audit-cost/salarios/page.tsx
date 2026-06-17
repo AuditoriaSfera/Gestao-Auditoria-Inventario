@@ -117,6 +117,7 @@ function SalarioModal({
   const [vigenciaFim, setVigenciaFim] = useState(
     initial?.vigenciaFim ? new Date(initial.vigenciaFim).toISOString().slice(0, 10) : ''
   )
+  const [tipoTime, setTipoTime] = useState<'campo' | 'administrativo'>(initial?.tipoTime ?? 'campo')
   const [observacao, setObservacao] = useState(initial?.observacao ?? '')
   const [error, setError] = useState('')
 
@@ -138,6 +139,7 @@ function SalarioModal({
         await updateMut.mutateAsync({
           id: initial.id,
           cargo: cargo || undefined,
+          tipoTime,
           salarioBase: salNum,
           encargos: encNum,
           vigenciaInicio: new Date(vigenciaInicio + 'T12:00:00'),
@@ -151,6 +153,7 @@ function SalarioModal({
           await createMut.mutateAsync({
             collaboratorId,
             cargo: cargo || undefined,
+            tipoTime,
             salarioBase: salNum,
             encargos: encNum,
             vigenciaInicio: inicioMes,
@@ -203,6 +206,34 @@ function SalarioModal({
           <div>
             <label style={labelStyle}>Cargo / Função</label>
             <input value={cargo} onChange={e => setCargo(e.target.value)} placeholder="Ex: Auditora Sênior" style={inputStyle} />
+          </div>
+
+          {/* Tipo de Time */}
+          <div>
+            <label style={labelStyle}>Tipo de Time *</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {(['campo', 'administrativo'] as const).map(opt => {
+                const selected = tipoTime === opt
+                const labels = { campo: '🏃 Time de Campo', administrativo: '🖥️ Administrativo' }
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setTipoTime(opt)}
+                    style={{
+                      flex: 1, padding: '10px 8px', borderRadius: '10px', cursor: 'pointer',
+                      border: `2px solid ${selected ? '#2563eb' : '#e2e8f0'}`,
+                      background: selected ? '#eff6ff' : 'white',
+                      color: selected ? '#1d4ed8' : '#64748b',
+                      fontSize: '13px', fontWeight: selected ? '700' : '500',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {labels[opt]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Salário + Encargos */}

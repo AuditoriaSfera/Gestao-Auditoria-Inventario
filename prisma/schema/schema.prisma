@@ -1483,6 +1483,7 @@ model AuditCollaboratorSalary {
   id             String    @id @default(cuid())
   collaboratorId String
   cargo          String?
+  tipoTime       String?   @default("campo")
   salarioBase    Decimal   @db.Decimal(15, 4)
   encargos       Decimal   @db.Decimal(15, 4) @default(0)
   status         String    @default("ACTIVE")

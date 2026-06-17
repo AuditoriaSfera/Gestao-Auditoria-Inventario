@@ -67,6 +67,7 @@ export const auditCollaboratorSalariesRouter = createTRPCRouter({
     .input(z.object({
       collaboratorId: z.string().min(1),
       cargo:          z.string().optional(),
+      tipoTime:       z.enum(['campo', 'administrativo']).optional(),
       salarioBase:    z.number().min(0),
       encargos:       z.number().min(0).default(0),
       vigenciaInicio: z.date(),
@@ -87,6 +88,7 @@ export const auditCollaboratorSalariesRouter = createTRPCRouter({
     .input(z.object({
       id:             z.string(),
       cargo:          z.string().optional(),
+      tipoTime:       z.enum(['campo', 'administrativo']).optional(),
       salarioBase:    z.number().min(0).optional(),
       encargos:       z.number().min(0).optional(),
       vigenciaInicio: z.date().optional(),

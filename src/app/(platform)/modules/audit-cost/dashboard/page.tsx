@@ -790,8 +790,8 @@ export default function AuditDashboardPage() {
       {/* Card Custo por Mês — gráfico de linhas */}
       {byMonth.length > 0 && (() => {
         const W = Math.max(byMonth.length * 90, 400)
-        const H = 160
-        const PAD = { top: 20, right: 24, bottom: 36, left: 60 }
+        const H = 180
+        const PAD = { top: 36, right: 24, bottom: 36, left: 60 }
         const iW = W - PAD.left - PAD.right
         const iH = H - PAD.top - PAD.bottom
         const xStep = byMonth.length > 1 ? iW / (byMonth.length - 1) : iW / 2
@@ -827,6 +827,10 @@ export default function AuditDashboardPage() {
         // Y axis labels
         const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ v: maxMonthVal * f, y: toY(maxMonthVal * f) }))
 
+        // % de cada mês sobre o total geral
+        const grandTotal = byMonth.reduce((acc, m) => acc + m.total, 0)
+        const totalPts = pts('total')
+
         return (
           <DataCard title="Custo por Mês">
             <div style={{ overflowX: 'auto' }}>
@@ -845,6 +849,18 @@ export default function AuditDashboardPage() {
                 {area('salTotal', '#8b5cf6', '#8b5cf6')}
                 {/* total line */}
                 <polyline points={polyline('total')} fill="none" stroke="#0f172a" strokeWidth="2" strokeDasharray="5 3" strokeLinejoin="round" />
+                {/* % labels above each total point */}
+                {totalPts.map(([x, y], i) => {
+                  const pct = grandTotal > 0 ? Math.round((byMonth[i].total / grandTotal) * 100) : 0
+                  return (
+                    <g key={`pct-${i}`}>
+                      <rect x={x - 16} y={y - 22} width={32} height={16} rx={4} fill="#0f172a" opacity={0.82} />
+                      <text x={x} y={y - 10} textAnchor="middle" fontSize="10" fontWeight="700" fill="white">
+                        {pct}%
+                      </text>
+                    </g>
+                  )
+                })}
                 {/* x labels */}
                 {byMonth.map((m, i) => {
                   const x = PAD.left + i * xStep

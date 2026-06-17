@@ -11,6 +11,19 @@ import { formatCurrency } from '@/lib/utils'
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
 
+// Extrai { year, month, day } da string ISO sem conversão de timezone local
+function isoYMD(d: any) {
+  const s = String(d ?? '').slice(0, 10) // "YYYY-MM-DD"
+  const [y, m, day] = s.split('-').map(Number)
+  return { year: y, month: m, day: day ?? 1 }
+}
+// Cria Date UTC a partir de string ISO para comparações de range
+function utcDate(d: any, endOfDay = false): Date {
+  const { year, month, day } = isoYMD(d)
+  if (endOfDay) return new Date(Date.UTC(year, month - 1, day, 23, 59, 59))
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
 // ── Wrapper clicável para os cards ────────────────────────────────────────────
 function ClickableCard({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
@@ -46,13 +59,13 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
   // Filtra despesas respeitando os filtros do detail
   const filtered = useMemo(() => {
     return expenses.filter(e => {
+      const { year: ey, month: em } = isoYMD(e.date)
       const inPeriod = selectedPeriods.length === 0 || selectedPeriods.some(pk => {
         const [y, m] = pk.split('-').map(Number)
-        const d = new Date(e.date)
-        return d.getFullYear() === y && d.getMonth() + 1 === m
+        return ey === y && em === m
       })
       const inCollab = effectiveCollabs.length === 0 || effectiveCollabs.includes(e.collaboratorId) || effectiveCollabs.includes(e.auditorId)
-      const d = new Date(e.date)
+      const d = utcDate(e.date)
       const inFrom = !dateFrom || d >= new Date(dateFrom)
       const inTo   = !dateTo   || d <= new Date(dateTo + 'T23:59:59')
       const q = search.toLowerCase()
@@ -68,8 +81,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
     return trips.filter(t => {
       const inPeriod = selectedPeriods.length === 0 || selectedPeriods.some(pk => {
         const [y, m] = pk.split('-').map(Number)
-        const d = new Date(t.startDate)
-        return d.getFullYear() === y && d.getMonth() + 1 === m
+        return tripInPeriod(t, y, m)
       })
       const inCollab = effectiveCollabs.length === 0 || effectiveCollabs.includes(t.collaboratorId)
       const q = search.toLowerCase()
@@ -82,7 +94,11 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
   const thSt: React.CSSProperties = { padding: '10px 14px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1 }
   const tdSt: React.CSSProperties = { padding: '10px 14px', borderBottom: '1px solid #f1f5f9', fontSize: '13px', verticalAlign: 'middle' }
 
-  function fmt(d: any) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—' }
+  function fmt(d: any) {
+    if (!d) return '—'
+    const { year, month, day } = isoYMD(d)
+    return `${String(day).padStart(2,'0')}/${String(month).padStart(2,'0')}/${year}`
+  }
   function curr(v: any) { return `R$ ${Number(v).toFixed(2).replace('.', ',')}` }
   function collabName(id: string) { return collabs?.find((c: any) => c.id === id)?.name ?? '—' }
 
@@ -465,10 +481,10 @@ function Bar({ label, value, max, color = '#3b82f6', badge }: { label: string; v
 // ── Verifica se uma viagem sobrepõe o mês/ano filtrado ───────────────────────
 function tripInPeriod(trip: any, year: number, month: number): boolean {
   if (!trip.startDate) return false
-  const s = new Date(trip.startDate)
-  const e = trip.endDate ? new Date(trip.endDate) : s
-  const periodStart = new Date(year, month - 1, 1)
-  const periodEnd = new Date(year, month, 0, 23, 59, 59)
+  const s = utcDate(trip.startDate)
+  const e = trip.endDate ? utcDate(trip.endDate, true) : utcDate(trip.startDate, true)
+  const periodStart = new Date(Date.UTC(year, month - 1, 1))
+  const periodEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59))
   return s <= periodEnd && e >= periodStart
 }
 
@@ -550,10 +566,10 @@ export default function AuditDashboardPage() {
   const monthExpenses = useMemo(() => {
     if (!expenses?.expenses || selectedPeriods.length === 0) return []
     return expenses.expenses.filter((e: any) => {
-      const d = new Date(e.date)
+      const { year: ey, month: em } = isoYMD(e.date)
       const inPeriod = selectedPeriods.some(pk => {
         const [y, m] = pk.split('-').map(Number)
-        return d.getFullYear() === y && d.getMonth() + 1 === m
+        return ey === y && em === m
       })
       const inCollab = effectiveCollabs.length === 0 ||
         effectiveCollabs.includes(e.collaboratorId) ||
@@ -738,8 +754,8 @@ export default function AuditDashboardPage() {
         // despesas de viagem do mês
         const expTotal = allExp
           .filter(e => {
-            const d = new Date(e.date)
-            return d.getFullYear() === p.year && d.getMonth() + 1 === p.month
+            const { year: ey, month: em } = isoYMD(e.date)
+            return ey === p.year && em === p.month
           })
           .reduce((s, e) => s + Number(e.value), 0)
 

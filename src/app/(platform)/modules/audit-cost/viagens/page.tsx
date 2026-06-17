@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { trpc } from '@/lib/trpc'
 import { ModulePage, DataCard, EmptyState, LoadingState, Btn } from '@/components/shared/module-page'
 import { formatDate, formatCurrency } from '@/lib/utils'
@@ -201,7 +202,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
     position: 'fixed',
     left: rect.left,
     minWidth: Math.max(rect.width, 220),
-    zIndex: 9999,
+    zIndex: 99999,
     background: 'white',
     border: '1.5px solid #e2e8f0',
     borderRadius: '10px',
@@ -212,36 +213,38 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
       : { top: rect.bottom + 2, maxHeight: Math.min(spaceBelow - 16, 280) }),
   } : {}
 
+  const dropdown = open && rect ? (
+    <div style={dropStyle}>
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+        <button onClick={() => onChange([...options])} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
+        <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+      </div>
+      {options.map(s => {
+        const isSel = selected.includes(s)
+        return (
+          <div key={s} onClick={() => toggle(s)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
+            onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
+            onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+            <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
+            </div>
+            <span style={{ fontSize: '13px', color: '#0f172a' }}>{s}</span>
+          </div>
+        )
+      })}
+      <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', textAlign: 'right', position: 'sticky', bottom: 0, background: 'white' }}>
+        <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '6px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
+      </div>
+    </div>
+  ) : null
+
   return (
     <div ref={triggerRef}>
       <div onClick={handleToggle} style={{ ...inpSm, cursor: 'pointer', minHeight: '38px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', justifyContent: 'space-between' }}>
         <span style={{ fontSize: '13px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? 'Selecionar loja...'}</span>
         <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '6px' }}>{open ? '▲' : '▼'}</span>
       </div>
-      {open && rect && (
-        <div style={dropStyle}>
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
-            <button onClick={() => onChange([...options])} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
-            <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
-          </div>
-          {options.map(s => {
-            const isSel = selected.includes(s)
-            return (
-              <div key={s} onClick={() => toggle(s)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
-                onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
-                onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
-                <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
-                </div>
-                <span style={{ fontSize: '13px', color: '#0f172a' }}>{s}</span>
-              </div>
-            )
-          })}
-          <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', textAlign: 'right', position: 'sticky', bottom: 0, background: 'white' }}>
-            <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '6px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
-          </div>
-        </div>
-      )}
+      {typeof document !== 'undefined' && dropdown ? createPortal(dropdown, document.body) : null}
     </div>
   )
 }

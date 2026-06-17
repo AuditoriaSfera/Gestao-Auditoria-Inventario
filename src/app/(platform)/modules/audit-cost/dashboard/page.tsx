@@ -908,7 +908,7 @@ export default function AuditDashboardPage() {
         />
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
 
         <ClickableCard onClick={() => setDetailCard('colaborador')}>
           <DataCard title="Gastos por Colaborador">

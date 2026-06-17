@@ -174,36 +174,71 @@ function CollabMultiSelect({ collabs, selectedIds, onChange }: { collabs: any[];
 // ─── Multi-select inline para Loja do dia ────────────────────────────────────
 function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
   const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const triggerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  function handleToggle() {
+    if (!open && triggerRef.current) setRect(triggerRef.current.getBoundingClientRect())
+    setOpen(o => !o)
+  }
+
   function toggle(s: string) { onChange(selected.includes(s) ? selected.filter(x => x !== s) : [...selected, s]) }
   const allSelected = options.length > 0 && selected.length === options.length
   const label = selected.length === 0 ? null : allSelected ? `Todas (${options.length})` : selected.length > 1 ? `${selected.length} lojas` : selected[0]
+
+  const spaceBelow = rect ? window.innerHeight - rect.bottom : 400
+  const openAbove = spaceBelow < 260
+  const dropStyle: React.CSSProperties = rect ? {
+    position: 'fixed',
+    left: rect.left,
+    minWidth: Math.max(rect.width, 220),
+    zIndex: 9999,
+    background: 'white',
+    border: '1.5px solid #e2e8f0',
+    borderRadius: '10px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+    overflowY: 'auto',
+    ...(openAbove
+      ? { bottom: window.innerHeight - rect.top + 2, maxHeight: Math.min(rect.top - 16, 280) }
+      : { top: rect.bottom + 2, maxHeight: Math.min(spaceBelow - 16, 280) }),
+  } : {}
+
   return (
-    <div style={{ position: 'relative' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ ...inpSm, cursor: 'pointer', minHeight: '36px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 8px', minWidth: '170px', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '12px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? '—'}</span>
-        <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '4px' }}>{open ? '▲' : '▼'}</span>
+    <div ref={triggerRef}>
+      <div onClick={handleToggle} style={{ ...inpSm, cursor: 'pointer', minHeight: '38px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '13px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? 'Selecionar loja...'}</span>
+        <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '6px' }}>{open ? '▲' : '▼'}</span>
       </div>
-      {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 200, background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: '200px', marginTop: '2px' }}>
-          <div style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button onClick={() => onChange([...options])} style={{ fontSize: '11px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
-            <button onClick={() => onChange([])} style={{ fontSize: '11px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+      {open && rect && (
+        <div style={dropStyle}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
+            <button onClick={() => onChange([...options])} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
+            <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
           </div>
           {options.map(s => {
             const isSel = selected.includes(s)
             return (
-              <div key={s} onClick={() => toggle(s)} style={{ padding: '7px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: isSel ? '#eff6ff' : 'transparent' }}
+              <div key={s} onClick={() => toggle(s)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
                 onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
                 onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
-                <div style={{ width: '14px', height: '14px', borderRadius: '3px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {isSel && <span style={{ color: 'white', fontSize: '9px', lineHeight: 1 }}>✓</span>}
+                <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
                 </div>
-                <span style={{ fontSize: '12px', color: '#0f172a' }}>{s}</span>
+                <span style={{ fontSize: '13px', color: '#0f172a' }}>{s}</span>
               </div>
             )
           })}
-          <div style={{ padding: '6px 10px', borderTop: '1px solid #f1f5f9', textAlign: 'right' }}>
-            <button onClick={() => setOpen(false)} style={{ fontSize: '11px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '6px', padding: '5px 14px', cursor: 'pointer' }}>Confirmar</button>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', textAlign: 'right', position: 'sticky', bottom: 0, background: 'white' }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '6px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
           </div>
         </div>
       )}
@@ -229,76 +264,68 @@ function TabelaDiaria({
   function setValue(d: string, tipo: string, v: string) {
     onChange({ ...rows, [d]: { ...rows[d], values: { ...rows[d]?.values, [tipo]: v } } })
   }
-  if (!dates.length) return <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Defina as datas da viagem para preencher a tabela.</div>
-
-  const thSt: React.CSSProperties = { padding: '8px 6px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }
-  const tdSt: React.CSSProperties = { padding: '6px 4px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' }
+  if (!dates.length) return <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Defina as datas da viagem para preencher a tabela.</div>
 
   const totaisPorTipo: Record<string, number> = {}
   for (const tipo of tipos) totaisPorTipo[tipo] = 0
   for (const d of dates) for (const tipo of tipos) totaisPorTipo[tipo] += parseMoney(rows[d]?.values?.[tipo] ?? '')
+  const totalGeral = Object.values(totaisPorTipo).reduce((a, b) => a + b, 0)
 
   return (
-    <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-        <thead>
-          <tr>
-            <th style={thSt}>Data</th>
-            <th style={thSt}>Dia</th>
-            <th style={{ ...thSt, minWidth: '170px' }}>Loja do dia</th>
-            {tipos.map(t => (
-              <th key={t} style={{ ...thSt, width: '72px', textAlign: 'center', verticalAlign: 'bottom', padding: '8px 4px' }}>
-                <div style={{ writingMode: 'vertical-rl' as const, transform: 'rotate(180deg)', fontSize: '11px', fontWeight: '700', color: '#64748b', lineHeight: '1.2', maxHeight: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t}
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Área com scroll vertical interno */}
+      <div style={{ maxHeight: '520px', overflowY: 'auto', overflowX: 'hidden' }}>
+        {dates.map((d, idx) => {
+          const row = rows[d] ?? { storeNames: [], values: {} }
+          const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
+          return (
+            <div key={d} style={{ borderBottom: idx < dates.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+              {/* Cabeçalho do dia */}
+              <div style={{ background: '#f8fafc', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{fmtDate(d)}</span>
+                  <span style={{ fontSize: '12px', color: '#64748b', background: '#e2e8f0', borderRadius: '6px', padding: '2px 8px' }}>{diaSemana(d)}</span>
                 </div>
-              </th>
-            ))}
-            <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {dates.map(d => {
-            const row = rows[d] ?? { storeNames: [], values: {} }
-            const total = tipos.reduce((s, t) => s + parseMoney(row.values?.[t] ?? ''), 0)
-            return (
-              <tr key={d}>
-                <td style={{ ...tdSt, fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap', paddingLeft: '8px' }}>{fmtDate(d)}</td>
-                <td style={{ ...tdSt, color: '#64748b', whiteSpace: 'nowrap', fontSize: '12px' }}>{diaSemana(d)}</td>
-                <td style={tdSt}>
-                  <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
-                </td>
-                {tipos.map(t => (
-                  <td key={t} style={{ ...tdSt, textAlign: 'center' }}>
-                    <input
-                      value={row.values?.[t] ?? ''}
-                      onChange={e => setValue(d, t, e.target.value)}
-                      placeholder="—"
-                      inputMode="decimal"
-                      style={{ ...inpSm, textAlign: 'right', width: '68px' }}
-                    />
-                  </td>
-                ))}
-                <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: total > 0 ? '#1e40af' : '#cbd5e1', whiteSpace: 'nowrap', paddingRight: '8px' }}>
+                <span style={{ fontWeight: '700', fontSize: '14px', color: total > 0 ? '#1e40af' : '#cbd5e1' }}>
                   {total > 0 ? formatCurrency(total) : '—'}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        <tfoot>
-          <tr style={{ background: '#f8fafc' }}>
-            <td colSpan={3} style={{ ...tdSt, fontWeight: '700', borderTop: '2px solid #e2e8f0', paddingLeft: '8px' }}>Total</td>
-            {tipos.map(t => (
-              <td key={t} style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: '#1e40af', borderTop: '2px solid #e2e8f0' }}>
-                {totaisPorTipo[t] > 0 ? formatCurrency(totaisPorTipo[t]) : '—'}
-              </td>
-            ))}
-            <td style={{ ...tdSt, textAlign: 'right', fontWeight: '900', color: '#0f172a', borderTop: '2px solid #e2e8f0', paddingRight: '8px' }}>
-              {formatCurrency(Object.values(totaisPorTipo).reduce((a, b) => a + b, 0))}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+                </span>
+              </div>
+              {/* Corpo do dia */}
+              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'white' }}>
+                {/* Loja do dia — largura total, campo principal */}
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Loja do dia</div>
+                  <LojasDoDiaSelect options={storeOptions} selected={row.storeNames ?? []} onChange={v => setStores(d, v)} />
+                </div>
+                {/* Grid de despesas — 2 colunas, nomes legíveis na horizontal */}
+                {tipos.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
+                    {tipos.map(t => (
+                      <div key={t}>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={t}>{t}</div>
+                        <input
+                          value={row.values?.[t] ?? ''}
+                          onChange={e => setValue(d, t, e.target.value)}
+                          placeholder="0,00"
+                          inputMode="decimal"
+                          style={{ ...inpSm, textAlign: 'right', width: '100%', boxSizing: 'border-box' as const, fontSize: '13px' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {/* Rodapé com total geral — sempre visível fora do scroll */}
+      <div style={{ background: '#f8fafc', padding: '12px 16px', borderTop: '2px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '12px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Geral</span>
+        <span style={{ fontSize: '16px', fontWeight: '900', color: totalGeral > 0 ? '#0f172a' : '#cbd5e1' }}>
+          {totalGeral > 0 ? formatCurrency(totalGeral) : '—'}
+        </span>
+      </div>
     </div>
   )
 }

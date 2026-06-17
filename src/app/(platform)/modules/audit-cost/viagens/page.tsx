@@ -177,11 +177,14 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     function handler(e: MouseEvent) {
-      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) setOpen(false)
+      const inTrigger = triggerRef.current?.contains(e.target as Node)
+      const inDrop = dropRef.current?.contains(e.target as Node)
+      if (!inTrigger && !inDrop) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -214,7 +217,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   } : {}
 
   const dropdown = open && rect ? (
-    <div style={dropStyle}>
+    <div ref={dropRef} style={dropStyle}>
       <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
         <button onClick={() => onChange([...options])} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
         <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
@@ -288,7 +291,21 @@ function TabelaDiaria({
               {/* Colunas fixas (sticky) — sempre visíveis */}
               <th style={{ ...thSt, ...stickyBase, left: 0, minWidth: '90px', borderRight: '1px solid #e2e8f0' }}>Data</th>
               <th style={{ ...thSt, ...stickyBase, left: '90px', minWidth: '90px', borderRight: '1px solid #e2e8f0' }}>Dia</th>
-              <th style={{ ...thSt, ...stickyBase, left: '180px', minWidth: '200px', borderRight: '2px solid #e2e8f0' }}>Loja do dia</th>
+              <th style={{ ...thSt, ...stickyBase, left: '180px', minWidth: '200px', borderRight: '2px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <span>Loja do dia</span>
+                  {storeOptions.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const updated = { ...rows }
+                        for (const d of dates) updated[d] = { ...updated[d], storeNames: [...storeOptions] }
+                        onChange(updated)
+                      }}
+                      style={{ fontSize: '10px', fontWeight: '600', color: '#2563eb', background: '#eff6ff', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >Marcar todas</button>
+                  )}
+                </div>
+              </th>
               {/* Colunas de despesa — rolam lateralmente */}
               {tipos.map(t => (
                 <th key={t} style={{ ...thSt, minWidth: '110px', textAlign: 'right' }}>{t}</th>

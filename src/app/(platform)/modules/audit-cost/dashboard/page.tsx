@@ -143,6 +143,53 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
     ).sort((a, b) => (Number(b.salarioBase) + Number(b.encargos)) - (Number(a.salarioBase) + Number(a.encargos)))
   }, [type, salaries, effectiveCollabs, search])
 
+  function exportCSV() {
+    const BOM = '﻿'
+    const escape = (v: any) => {
+      const s = String(v ?? '').replace(/"/g, '""')
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s
+    }
+    const toRow = (arr: any[]) => arr.map(escape).join(',')
+    let rows: string[][] = []
+
+    if (type === 'colaborador' || type === 'centrocusto' || type === 'pagamento') {
+      const secondCol = type === 'colaborador' ? 'Centro de Custo' : 'Colaborador'
+      rows.push(['Data', secondCol, 'Loja', 'Forma de Pagamento', 'Valor'])
+      for (const g of grouped as any[]) {
+        for (const e of [...g.rows].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())) {
+          const secondVal = type === 'colaborador' ? (e.type ?? '') : collabName(e.collaboratorId ?? e.auditorId)
+          rows.push([fmt(e.date), secondVal, e.storeName ?? '', e.paymentMethod ?? '', Number(e.value).toFixed(2).replace('.', ',')])
+        }
+      }
+    } else if (type === 'loja') {
+      rows.push(['Loja', 'Inventários', 'Total Gasto'])
+      for (const s of grouped as any[]) {
+        rows.push([s.name, String(s.inventories), Number(s.spent).toFixed(2).replace('.', ',')])
+      }
+    } else if (type === 'dias') {
+      rows.push(['Colaborador', 'Cidade', 'Estado', 'Lojas', 'Início', 'Fim', 'Dias', 'Motivo'])
+      for (const t of [...filteredTrips].sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())) {
+        const s = new Date(t.startDate); const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
+        let days = 0; const cur = new Date(s); while (cur <= e) { days++; cur.setDate(cur.getDate() + 1) }
+        rows.push([collabName(t.collaboratorId), t.city ?? '', t.state ?? '', t.stores ?? '', fmt(t.startDate), fmt(t.endDate), String(days), t.reason ?? ''])
+      }
+    } else if (type === 'pessoal') {
+      rows.push(['Colaborador', 'Cargo', 'Time', 'Vigência Início', 'Vigência Fim', 'Salário Base', 'Encargos', 'Total'])
+      for (const s of salFiltered) {
+        rows.push([s.collaborator?.name ?? '', s.cargo ?? '', s.tipoTime === 'campo' ? 'Campo' : 'Administrativo', fmt(s.vigenciaInicio), s.vigenciaFim ? fmt(s.vigenciaFim) : 'atual', Number(s.salarioBase).toFixed(2).replace('.', ','), Number(s.encargos).toFixed(2).replace('.', ','), (Number(s.salarioBase) + Number(s.encargos)).toFixed(2).replace('.', ',')])
+      }
+    }
+
+    const csv = BOM + rows.map(toRow).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${titles[type].replace(/\s+/g, '_')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: '#f8fafc', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
@@ -150,7 +197,10 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
         <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
           ← Voltar
         </button>
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>{titles[type]}</h2>
+        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a', flex: 1 }}>{titles[type]}</h2>
+        <button onClick={exportCSV} style={{ padding: '8px 16px', borderRadius: '8px', border: '1.5px solid #22c55e', background: '#f0fdf4', cursor: 'pointer', fontSize: '13px', fontWeight: '600', color: '#16a34a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          ⬇ Exportar CSV
+        </button>
       </div>
 
       {/* Filtros */}

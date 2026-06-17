@@ -135,6 +135,7 @@ function tripInAnyPeriod(trip: any, periods: string[]): boolean {
 export default function AuditDashboardPage() {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
   const [selectedCollabs, setSelectedCollabs] = useState<string[]>([])
+  const [filterTipoTime, setFilterTipoTime] = useState<'' | 'campo' | 'administrativo'>('')
 
   const { data: availablePeriods } = trpc.auditTrips.listAvailablePeriods.useQuery()
 
@@ -163,13 +164,35 @@ export default function AuditDashboardPage() {
     [collabs]
   )
 
+  // IDs de colaboradores do tipo selecionado (pelo registro de salário mais recente)
+  const tipoTimeCollabIds = useMemo(() => {
+    if (!filterTipoTime) return null
+    const { data: sal } = { data: salariesData }
+    const items: any[] = sal?.items ?? []
+    const latest = new Map<string, string>() // collabId → tipoTime
+    const sorted = [...items].filter(s => s.deletedAt == null && s.status === 'ACTIVE')
+      .sort((a, b) => new Date(b.vigenciaInicio).getTime() - new Date(a.vigenciaInicio).getTime())
+    for (const s of sorted) {
+      if (!latest.has(s.collaboratorId)) latest.set(s.collaboratorId, s.tipoTime ?? 'campo')
+    }
+    return new Set([...latest.entries()].filter(([, t]) => t === filterTipoTime).map(([id]) => id))
+  }, [filterTipoTime, salariesData])
+
+  // Filtro efetivo de colaboradores (combina seleção manual + filtro de tipo)
+  const effectiveCollabs = useMemo(() => {
+    if (!tipoTimeCollabIds) return selectedCollabs
+    const tipoArr = [...tipoTimeCollabIds]
+    if (selectedCollabs.length === 0) return tipoArr
+    return selectedCollabs.filter(id => tipoTimeCollabIds.has(id))
+  }, [selectedCollabs, tipoTimeCollabIds])
+
   // ── Viagens do período (com filtro de colaborador) ───────────────────────────
   const tripsAll = tripsData?.trips ?? []
   const tripsInPeriod = useMemo(() => {
     const byPeriod = tripsAll.filter((t: any) => tripInAnyPeriod(t, selectedPeriods))
-    if (selectedCollabs.length === 0) return byPeriod
-    return byPeriod.filter((t: any) => selectedCollabs.includes(t.collaboratorId))
-  }, [tripsAll, selectedPeriods, selectedCollabs])
+    if (effectiveCollabs.length === 0) return byPeriod
+    return byPeriod.filter((t: any) => effectiveCollabs.includes(t.collaboratorId))
+  }, [tripsAll, selectedPeriods, effectiveCollabs])
 
   // ── Despesas do período (com filtro de colaborador) ──────────────────────────
   const monthExpenses = useMemo(() => {
@@ -180,12 +203,12 @@ export default function AuditDashboardPage() {
         const [y, m] = pk.split('-').map(Number)
         return d.getFullYear() === y && d.getMonth() + 1 === m
       })
-      const inCollab = selectedCollabs.length === 0 ||
-        selectedCollabs.includes(e.collaboratorId) ||
-        selectedCollabs.includes(e.auditorId)
+      const inCollab = effectiveCollabs.length === 0 ||
+        effectiveCollabs.includes(e.collaboratorId) ||
+        effectiveCollabs.includes(e.auditorId)
       return inPeriod && inCollab
     })
-  }, [expenses, selectedPeriods, selectedCollabs])
+  }, [expenses, selectedPeriods, effectiveCollabs])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const totalMonthExpenses = useMemo(
@@ -256,7 +279,7 @@ export default function AuditDashboardPage() {
       for (const s of sorted) {
         if (seen.has(s.collaboratorId)) continue
         seen.add(s.collaboratorId)
-        if (selectedCollabs.length > 0 && !selectedCollabs.includes(s.collaboratorId)) continue
+        if (effectiveCollabs.length > 0 && !effectiveCollabs.includes(s.collaboratorId)) continue
         const name = s.collaborator?.name ?? s.collaboratorId.slice(0, 8)
         const cost = Number(s.salarioBase) + Number(s.encargos)
         const tipoTime = s.tipoTime ?? 'campo'
@@ -265,7 +288,7 @@ export default function AuditDashboardPage() {
       }
     }
     return Array.from(result.values()).sort((a, b) => b.total - a.total)
-  }, [allSalaries, selectedPeriods, selectedCollabs])
+  }, [allSalaries, selectedPeriods, effectiveCollabs])
 
   const totalPersonnelCost = useMemo(
     () => personnelCostByCollab.reduce((s, c) => s + c.total, 0),
@@ -412,6 +435,27 @@ export default function AuditDashboardPage() {
           onChange={setSelectedCollabs}
           placeholder="Todos os colaboradores"
         />
+        <div style={{ display: 'flex', gap: '0', borderRadius: '10px', overflow: 'hidden', border: '1.5px solid #e2e8f0' }}>
+          {([
+            { value: '', label: 'Todos' },
+            { value: 'campo', label: '🏃 Campo' },
+            { value: 'administrativo', label: '🖥️ Adm.' },
+          ] as const).map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setFilterTipoTime(opt.value)}
+              style={{
+                padding: '8px 14px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: filterTipoTime === opt.value ? '700' : '500',
+                background: filterTipoTime === opt.value ? '#2563eb' : 'white',
+                color: filterTipoTime === opt.value ? 'white' : '#475569',
+                borderRight: opt.value !== 'administrativo' ? '1px solid #e2e8f0' : 'none',
+                transition: 'all 0.15s',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* KPIs */}

@@ -473,49 +473,97 @@ export default function AuditDashboardPage() {
         <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
       </div>
 
-      {/* Card Custo por Mês — largura total */}
-      {byMonth.length > 0 && (
-        <DataCard title="Custo por Mês">
-          <div style={{ overflowX: 'auto' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', minWidth: `${byMonth.length * 72}px`, padding: '8px 4px 0' }}>
-              {byMonth.map(m => {
-                const expH  = Math.round((m.expTotal / maxMonthVal) * 140)
-                const salH  = Math.round((m.salTotal / maxMonthVal) * 140)
+      {/* Card Custo por Mês — gráfico de linhas */}
+      {byMonth.length > 0 && (() => {
+        const W = Math.max(byMonth.length * 90, 400)
+        const H = 160
+        const PAD = { top: 20, right: 24, bottom: 36, left: 60 }
+        const iW = W - PAD.left - PAD.right
+        const iH = H - PAD.top - PAD.bottom
+        const xStep = byMonth.length > 1 ? iW / (byMonth.length - 1) : iW / 2
+
+        const toY = (v: number) => PAD.top + iH - (v / maxMonthVal) * iH
+
+        const pts = (key: 'total' | 'expTotal' | 'salTotal') =>
+          byMonth.map((m, i) => [PAD.left + i * xStep, toY(m[key])] as [number, number])
+
+        const polyline = (key: 'total' | 'expTotal' | 'salTotal') =>
+          pts(key).map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+
+        const area = (key: 'total' | 'expTotal' | 'salTotal', color: string, stroke: string) => {
+          const p = pts(key)
+          const areaPath = `M${p[0][0].toFixed(1)},${(PAD.top + iH).toFixed(1)} ` +
+            p.map(([x, y]) => `L${x.toFixed(1)},${y.toFixed(1)}`).join(' ') +
+            ` L${p[p.length-1][0].toFixed(1)},${(PAD.top + iH).toFixed(1)} Z`
+          return (
+            <>
+              <path d={areaPath} fill={color} opacity={0.12} />
+              <polyline points={polyline(key)} fill="none" stroke={stroke} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+              {p.map(([x, y], i) => {
                 const isSelected = selectedPeriods.some(pk => {
-                  const [y, mo] = pk.split('-').map(Number)
-                  return m.label === `${MONTHS[mo - 1]}/${String(y).slice(2)}`
+                  const [yr, mo] = pk.split('-').map(Number)
+                  return byMonth[i].label === `${MONTHS[mo - 1]}/${String(yr).slice(2)}`
                 })
-                return (
-                  <div key={m.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', minWidth: '60px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap' }}>{formatCurrency(m.total)}</div>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '140px' }}>
-                      {m.expTotal > 0 && (
-                        <div title={`Viagens: ${formatCurrency(m.expTotal)}`}
-                          style={{ width: '22px', height: `${expH}px`, background: '#3b82f6', borderRadius: '4px 4px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
-                      )}
-                      {m.salTotal > 0 && (
-                        <div title={`Pessoal: ${formatCurrency(m.salTotal)}`}
-                          style={{ width: '22px', height: `${salH}px`, background: '#8b5cf6', borderRadius: '4px 4px 0 0', minHeight: '4px', transition: 'height 0.3s' }} />
-                      )}
-                    </div>
-                    <div style={{ fontSize: '11px', color: isSelected ? '#2563eb' : '#64748b', fontWeight: isSelected ? '700' : '500', whiteSpace: 'nowrap' }}>{m.label}</div>
-                  </div>
-                )
+                return <circle key={i} cx={x} cy={y} r={isSelected ? 5 : 3.5} fill={stroke} stroke="white" strokeWidth="1.5" />
               })}
-            </div>
-            <div style={{ display: 'flex', gap: '16px', marginTop: '10px', paddingLeft: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
-                <div style={{ width: '12px', height: '12px', background: '#3b82f6', borderRadius: '2px' }} />
-                Despesas de Viagem
+            </>
+          )
+        }
+
+        // Y axis labels
+        const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => ({ v: maxMonthVal * f, y: toY(maxMonthVal * f) }))
+
+        return (
+          <DataCard title="Custo por Mês">
+            <div style={{ overflowX: 'auto' }}>
+              <svg width={W} height={H} style={{ display: 'block', minWidth: '320px' }}>
+                {/* grid lines */}
+                {yTicks.map(({ v, y }) => (
+                  <g key={v}>
+                    <line x1={PAD.left} y1={y} x2={PAD.left + iW} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 3" />
+                    <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8">
+                      {v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toFixed(0)}
+                    </text>
+                  </g>
+                ))}
+                {/* areas + lines */}
+                {area('expTotal', '#3b82f6', '#3b82f6')}
+                {area('salTotal', '#8b5cf6', '#8b5cf6')}
+                {/* total line */}
+                <polyline points={polyline('total')} fill="none" stroke="#0f172a" strokeWidth="2" strokeDasharray="5 3" strokeLinejoin="round" />
+                {/* x labels */}
+                {byMonth.map((m, i) => {
+                  const x = PAD.left + i * xStep
+                  const isSelected = selectedPeriods.some(pk => {
+                    const [yr, mo] = pk.split('-').map(Number)
+                    return m.label === `${MONTHS[mo - 1]}/${String(yr).slice(2)}`
+                  })
+                  return (
+                    <text key={m.label} x={x} y={H - 6} textAnchor="middle" fontSize="11"
+                      fill={isSelected ? '#2563eb' : '#64748b'} fontWeight={isSelected ? '700' : '400'}>
+                      {m.label}
+                    </text>
+                  )
+                })}
+              </svg>
+              <div style={{ display: 'flex', gap: '20px', marginTop: '8px', paddingLeft: `${PAD.left}px` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
+                  <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#3b82f6" strokeWidth="2.5" /></svg>
+                  Despesas de Viagem
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
+                  <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#8b5cf6" strokeWidth="2.5" /></svg>
+                  Custo de Pessoal
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
+                  <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#0f172a" strokeWidth="2" strokeDasharray="5 3" /></svg>
+                  Total
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
-                <div style={{ width: '12px', height: '12px', background: '#8b5cf6', borderRadius: '2px' }} />
-                Custo de Pessoal
-              </div>
             </div>
-          </div>
-        </DataCard>
-      )}
+          </DataCard>
+        )
+      })()}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
 

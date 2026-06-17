@@ -294,16 +294,14 @@ function TabelaDiaria({
               <th style={{ ...thSt, ...stickyBase, left: '180px', minWidth: '200px', borderRight: '2px solid #e2e8f0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <span>Loja do dia</span>
-                  {storeOptions.length > 0 && (
-                    <button
-                      onClick={() => {
-                        const updated = { ...rows }
-                        for (const d of dates) updated[d] = { ...updated[d], storeNames: [...storeOptions] }
-                        onChange(updated)
-                      }}
-                      style={{ fontSize: '10px', fontWeight: '600', color: '#2563eb', background: '#eff6ff', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}
-                    >Marcar todas</button>
-                  )}
+                  <button
+                    onClick={() => {
+                      const updated = { ...rows }
+                      for (const d of dates) updated[d] = { ...updated[d], storeNames: [...storeOptions] }
+                      onChange(updated)
+                    }}
+                    style={{ fontSize: '10px', fontWeight: '600', color: '#2563eb', background: '#eff6ff', border: 'none', borderRadius: '4px', padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >Marcar todas</button>
                 </div>
               </th>
               {/* Colunas de despesa — rolam lateralmente */}

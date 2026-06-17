@@ -382,15 +382,13 @@ function MultiSelectDropdown({ options, selected, onChange, placeholder }: {
 // ── Componentes de apresentação ───────────────────────────────────────────────
 function KpiCard({ label, value, sub, icon, color }: { label: string; value: string; sub?: string; icon: string; color?: string }) {
   return (
-    <div style={{ background: 'white', borderRadius: '14px', padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>{label}</div>
-          <div style={{ fontSize: '22px', fontWeight: '800', color: color ?? '#0f172a' }}>{value}</div>
-          {sub && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{sub}</div>}
-        </div>
-        <span style={{ fontSize: '26px', opacity: 0.8 }}>{icon}</span>
+    <div style={{ background: 'white', borderRadius: '12px', padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.3 }}>{label}</span>
+        <span style={{ fontSize: '22px', opacity: 0.75, flexShrink: 0, marginLeft: '8px' }}>{icon}</span>
       </div>
+      <div style={{ fontSize: '20px', fontWeight: '800', color: color ?? '#0f172a', lineHeight: 1.2 }}>{value}</div>
+      {sub && <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.3 }}>{sub}</div>}
     </div>
   )
 }
@@ -760,19 +758,33 @@ export default function AuditDashboardPage() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-        <KpiCard icon="🏦" label="Custo Total Operação"      value={formatCurrency(totalOperationCost)} color="#2563eb" />
-        <KpiCard icon="💰" label="Despesas de Viagem"        value={formatCurrency(totalMonthExpenses)} />
-        <KpiCard icon="👤" label="Custo de Pessoal"          value={formatCurrency(totalPersonnelCost)} sub={`${personnelCostByCollab.length} colaborador(es)`} />
-        <KpiCard icon="🏃" label="Time de Campo"             value={formatCurrency(totalCampoCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'campo').length} colab.`} />
-        <KpiCard icon="🖥️" label="Administrativo"            value={formatCurrency(totalAdmCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'administrativo').length} colab.`} />
-        <KpiCard icon="📅" label="Dias em Viagem"            value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
-        <KpiCard icon="👥" label="Colaboradores"             value={String(uniqueCollabsInPeriod)} sub="no período" />
-        <KpiCard icon="🏪" label="Lojas Inventariadas"       value={String(uniqueStores)} sub="lojas únicas" />
-        <KpiCard icon="📋" label="Inventários Realizados"    value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
-        <KpiCard icon="📊" label="Custo Médio / Inventário"  value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
-        <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
+      {/* KPIs — Grupo 1: Custos e Colaboradores */}
+      <div>
+        <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '8px' }}>
+          Custos e Colaboradores
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '10px' }}>
+          <KpiCard icon="🏦" label="Custo Total Operação"      value={formatCurrency(totalOperationCost)} color="#2563eb" />
+          <KpiCard icon="💰" label="Despesas de Viagem"        value={formatCurrency(totalMonthExpenses)} />
+          <KpiCard icon="👤" label="Custo de Pessoal"          value={formatCurrency(totalPersonnelCost)} sub={`${personnelCostByCollab.length} colaborador(es)`} />
+          <KpiCard icon="🏃" label="Time de Campo"             value={formatCurrency(totalCampoCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'campo').length} colab.`} />
+          <KpiCard icon="🖥️" label="Administrativo"            value={formatCurrency(totalAdmCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'administrativo').length} colab.`} />
+          <KpiCard icon="👥" label="Colaboradores"             value={String(uniqueCollabsInPeriod)} sub="no período" />
+          <KpiCard icon="🧑" label="Custo Médio / Colaborador" value={formatCurrency(avgPerCollab)} />
+        </div>
+      </div>
+
+      {/* KPIs — Grupo 2: Inventários e Viagens */}
+      <div>
+        <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8', marginBottom: '8px' }}>
+          Inventários e Viagens
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '10px' }}>
+          <KpiCard icon="📋" label="Inventários Realizados"   value={String(totalInventories)} sub={`em ${tripsInPeriod.length} viagem(ns)`} />
+          <KpiCard icon="📊" label="Custo Médio / Inventário" value={formatCurrency(avgPerInventory)} sub={totalInventories === 0 ? 'sem inventários' : undefined} />
+          <KpiCard icon="🏪" label="Lojas Inventariadas"      value={String(uniqueStores)} sub="lojas únicas" />
+          <KpiCard icon="📅" label="Dias em Viagem"           value={String(totalDaysInTravel)} sub={`${tripsInPeriod.length} viagem(ns) no período`} />
+        </div>
       </div>
 
       {/* Card Custo por Mês — gráfico de linhas */}

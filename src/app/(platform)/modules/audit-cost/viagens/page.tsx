@@ -1397,6 +1397,7 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   const [filterSearch, setFilterSearch] = useState('')
   const [filterCreatedFrom, setFilterCreatedFrom] = useState('')
   const [filterCreatedTo, setFilterCreatedTo] = useState('')
+  const [filterStatus, setFilterStatus] = useState<'' | 'OPEN' | 'SUBMITTED' | 'REJECTED' | 'CLOSED'>('')
   const [page, setPage] = useState(1)
   const [deleteTripId, setDeleteTripId] = useState<string | null>(null)
 
@@ -1406,6 +1407,9 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
     search: filterSearch || undefined,
     createdAtFrom: filterCreatedFrom ? new Date(filterCreatedFrom) : undefined,
     createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
+    status: (filterStatus === 'CLOSED' || filterStatus === 'SUBMITTED') ? filterStatus : filterStatus === 'OPEN' ? 'OPEN' : filterStatus === 'REJECTED' ? 'OPEN' : undefined,
+    rejectedOnly: filterStatus === 'REJECTED' ? true : undefined,
+    excludeRejected: filterStatus === 'OPEN' ? true : undefined,
   })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
@@ -1458,8 +1462,18 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Criado até</label>
           <input type="date" value={filterCreatedTo} onChange={e => { setFilterCreatedTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
         </div>
-        {!!(filterSearch || filterCreatedFrom || filterCreatedTo) && (
-          <button onClick={() => { setFilterSearch(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setPage(1) }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label>
+          <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value as any); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white', cursor: 'pointer' }}>
+            <option value="">Todos</option>
+            <option value="OPEN">Aberta</option>
+            <option value="SUBMITTED">Enviada</option>
+            <option value="REJECTED">Rejeitada</option>
+            <option value="CLOSED">Concluída</option>
+          </select>
+        </div>
+        {!!(filterSearch || filterCreatedFrom || filterCreatedTo || filterStatus) && (
+          <button onClick={() => { setFilterSearch(''); setFilterCreatedFrom(''); setFilterCreatedTo(''); setFilterStatus(''); setPage(1) }}
             style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
             ✕ Limpar
           </button>

@@ -53,7 +53,7 @@ export const auditTripsRouter = createTRPCRouter({
       }
       const [trips, total] = await Promise.all([
         ctx.db.auditTrip.findMany({
-          where, skip, take, orderBy: { startDate: 'desc' },
+          where, skip, take, orderBy: { createdAt: 'desc' },
           include: {
             collaborator: { select: { id: true, name: true, role: true } },
             expenses: { where: { deletedAt: null }, select: { value: true } },

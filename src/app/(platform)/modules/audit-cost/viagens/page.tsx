@@ -2011,6 +2011,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
     if (!form.costCenterName) { setError('Selecione o centro de custo.'); return }
     if (!form.date) { setError('Informe a data.'); return }
     if (!form.value || isNaN(Number(form.value.replace(',', '.')))) { setError('Informe o valor.'); return }
+    if (!attachments.length) { setError('Adicione ao menos um comprovante.'); return }
     setError('')
     setSaving(true)
     try {
@@ -2090,7 +2091,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
       </Field>
 
       {/* ── Comprovantes ── */}
-      <Field label="Comprovantes" hint="Aceita imagens e PDFs — pode adicionar mais de um ou tirar foto">
+      <Field label="Comprovantes *" hint="Aceita imagens e PDFs — pode adicionar mais de um ou tirar foto">
         <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple style={{ display: 'none' }} onChange={handleFiles} />
         {showNewTripCamera && (
           <CameraModal

@@ -131,7 +131,7 @@ function SalarioModal({
     setError('')
     if (collaboratorIds.length === 0) return setError('Selecione ao menos um colaborador.')
     if (!salarioBase || salNum <= 0) return setError('Informe o salário base.')
-    if (!vigenciaInicio) return setError('Informe o início da vigência.')
+    if (isEdit && !vigenciaInicio) return setError('Informe o início da vigência.')
 
     try {
       if (isEdit) {
@@ -145,14 +145,15 @@ function SalarioModal({
           observacao: observacao || null,
         })
       } else {
+        const hoje = new Date()
+        const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1, 12, 0, 0)
         for (const collaboratorId of collaboratorIds) {
           await createMut.mutateAsync({
             collaboratorId,
             cargo: cargo || undefined,
             salarioBase: salNum,
             encargos: encNum,
-            vigenciaInicio: new Date(vigenciaInicio + 'T12:00:00'),
-            vigenciaFim: vigenciaFim ? new Date(vigenciaFim + 'T12:00:00') : undefined,
+            vigenciaInicio: inicioMes,
             observacao: observacao || undefined,
           })
         }
@@ -224,18 +225,20 @@ function SalarioModal({
             </div>
           )}
 
-          {/* Vigência */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={labelStyle}>Vigência Início *</label>
-              <input type="date" value={vigenciaInicio} onChange={e => setVigenciaInicio(e.target.value)} style={inputStyle} />
+          {/* Vigência — só exibida na edição */}
+          {isEdit && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Vigência Início *</label>
+                <input type="date" value={vigenciaInicio} onChange={e => setVigenciaInicio(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Vigência Fim</label>
+                <input type="date" value={vigenciaFim} onChange={e => setVigenciaFim(e.target.value)} style={inputStyle} />
+                <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Deixe em branco se ainda vigente</p>
+              </div>
             </div>
-            <div>
-              <label style={labelStyle}>Vigência Fim</label>
-              <input type="date" value={vigenciaFim} onChange={e => setVigenciaFim(e.target.value)} style={inputStyle} />
-              <p style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>Deixe em branco se ainda vigente</p>
-            </div>
-          </div>
+          )}
 
           {/* Observação */}
           <div>

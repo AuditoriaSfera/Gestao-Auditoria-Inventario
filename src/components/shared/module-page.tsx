@@ -68,15 +68,19 @@ export function DataCard({ title, children, action }: { title: string; children:
       borderRadius: '12px',
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       overflow: 'hidden',
+      height: '100%',
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 20px', borderBottom: '1px solid #f1f5f9',
+        padding: '16px 20px', borderBottom: '1px solid #f1f5f9', flexShrink: 0,
       }}>
         <h3 style={{ fontSize: '15px', fontWeight: '600', color: '#0f172a', margin: 0 }}>{title}</h3>
         {action}
       </div>
-      <div style={{ padding: '20px' }}>{children}</div>
+      <div style={{ padding: '20px', flex: 1 }}>{children}</div>
     </div>
   )
 }

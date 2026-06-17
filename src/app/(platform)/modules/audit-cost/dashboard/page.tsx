@@ -13,7 +13,7 @@ const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4',
 // ── Wrapper clicável para os cards ────────────────────────────────────────────
 function ClickableCard({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
-    <div onClick={onClick} style={{ cursor: 'pointer', borderRadius: '16px', transition: 'box-shadow 0.15s, transform 0.15s' }}
+    <div onClick={onClick} style={{ cursor: 'pointer', borderRadius: '16px', transition: 'box-shadow 0.15s, transform 0.15s', height: '100%', display: 'flex', flexDirection: 'column' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(37,99,235,0.13)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = ''; (e.currentTarget as HTMLElement).style.transform = '' }}
     >

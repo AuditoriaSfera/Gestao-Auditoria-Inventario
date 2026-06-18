@@ -253,11 +253,44 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
         {/* Despesas agrupadas */}
         {(type === 'colaborador' || type === 'centrocusto' || type === 'pagamento') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
-              grouped.map((g: any) => {
+            {grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> : (<>
+
+              {/* Totalizador geral */}
+              {(() => {
+                const totalGeral = grouped.reduce((sum: number, g: any) =>
+                  sum + g.rows.filter((r: any) => r.paymentMethod !== 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0), 0)
+                const totalAdt = grouped.reduce((sum: number, g: any) =>
+                  sum + g.rows.filter((r: any) => r.paymentMethod === 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0), 0)
+                const totalLanc = grouped.reduce((sum: number, g: any) =>
+                  sum + g.rows.filter((r: any) => r.paymentMethod !== 'Adiantamento').length, 0)
+                return (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', borderRadius: '12px', padding: '16px 24px', color: 'white' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resumo Geral — {grouped.length} grupo{grouped.length !== 1 ? 's' : ''}</div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>{totalLanc} lançamento{totalLanc !== 1 ? 's' : ''} no período</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+                      {totalAdt > 0 && (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Adiantamentos</div>
+                          <div style={{ fontSize: '15px', fontWeight: '700', color: '#fbbf24', marginTop: '2px' }}>{curr(totalAdt)}</div>
+                        </div>
+                      )}
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total de Gastos</div>
+                        <div style={{ fontSize: '22px', fontWeight: '900', color: 'white', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(totalGeral)}</div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Grupos individuais */}
+              {grouped.map((g: any) => {
                 const sortedRows = [...g.rows].sort((a: any, b: any) => utcDate(b.date).getTime() - utcDate(a.date).getTime())
-                const gastoTotal  = sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0)
-                const adtTotal    = sortedRows.filter((r: any) => r.paymentMethod === 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0)
+                const gastoTotal = sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0)
+                const adtTotal   = sortedRows.filter((r: any) => r.paymentMethod === 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0)
+                const lancCount  = sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').length
                 return (
                   <div key={g.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
                     {/* Cabeçalho do grupo */}
@@ -265,7 +298,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                       {/* Nome + contagem */}
                       <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{g.name}</div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').length} lançamento{sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').length !== 1 ? 's' : ''}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{lancCount} lançamento{lancCount !== 1 ? 's' : ''}</div>
                       </div>
                       {/* Totalizadores */}
                       <div style={{ display: 'flex', alignItems: 'stretch' }}>
@@ -275,16 +308,10 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                             <div style={{ fontSize: '14px', fontWeight: '700', color: '#d97706', marginTop: '2px' }}>{curr(adtTotal)}</div>
                           </div>
                         )}
-                        {gastoTotal > 0 && (
-                          <div style={{ padding: '12px 20px', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end' }}>
-                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gasto Real</div>
-                            <div style={{ fontSize: '14px', fontWeight: '700', color: '#dc2626', marginTop: '2px' }}>{curr(gastoTotal)}</div>
-                          </div>
-                        )}
-                        {/* Total — visualmente destacado como totalizador */}
+                        {/* Total individual — só gastos reais */}
                         <div style={{ padding: '0 24px', borderLeft: '2px solid #2563eb', background: '#eff6ff', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end', minWidth: '130px' }}>
-                          <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total Geral</div>
-                          <div style={{ fontSize: '20px', fontWeight: '900', color: '#1d4ed8', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(g.total)}</div>
+                          <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total Gasto</div>
+                          <div style={{ fontSize: '20px', fontWeight: '900', color: '#1d4ed8', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(gastoTotal)}</div>
                         </div>
                       </div>
                     </div>
@@ -324,8 +351,8 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                     </div>
                   </div>
                 )
-              })
-            }
+              })}
+            </>)}
           </div>
         )}
 

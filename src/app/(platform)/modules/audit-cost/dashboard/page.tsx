@@ -932,7 +932,20 @@ export default function AuditDashboardPage() {
                   const [yr, mo] = pk.split('-').map(Number)
                   return byMonth[i].label === `${MONTHS[mo - 1]}/${String(yr).slice(2)}`
                 })
-                return <circle key={i} cx={x} cy={y} r={isSelected ? 5 : 3.5} fill={stroke} stroke="white" strokeWidth="1.5" />
+                const val = byMonth[i][key]
+                const label = val >= 1000 ? `R$${(val/1000).toFixed(1)}k` : `R$${val.toFixed(0)}`
+                // posiciona abaixo do ponto para não colidir com o tooltip do total acima
+                const labelY = y + 18
+                const labelX = Math.max(PAD.left + 2, Math.min(x, PAD.left + iW - 2))
+                return (
+                  <g key={i}>
+                    <circle cx={x} cy={y} r={isSelected ? 5 : 3.5} fill={stroke} stroke="white" strokeWidth="1.5" />
+                    <text x={labelX} y={labelY} textAnchor="middle" fontSize="10" fontWeight="700" fill={stroke}
+                      style={{ paintOrder: 'stroke' } as any} stroke="white" strokeWidth="3">
+                      {label}
+                    </text>
+                  </g>
+                )
               })}
             </>
           )

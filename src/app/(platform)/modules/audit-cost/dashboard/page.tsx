@@ -359,23 +359,49 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
         {/* Lojas */}
         {type === 'loja' && (
           grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
-          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <th style={thSt}>Loja</th>
-                <th style={{ ...thSt, textAlign: 'center' }}>Inventários</th>
-                <th style={{ ...thSt, textAlign: 'right' }}>Total Gasto</th>
-              </tr></thead>
-              <tbody>
-                {(grouped as any[]).map((s: any) => (
-                  <tr key={s.name}>
-                    <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.name}</span></td>
-                    <td style={{ ...tdSt, textAlign: 'center' }}>{s.inventories > 0 ? <span style={{ background: '#dbeafe', color: '#1d4ed8', borderRadius: '20px', padding: '2px 10px', fontWeight: '700', fontSize: '12px' }}>{s.inventories} inv.</span> : '—'}</td>
-                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{s.spent > 0 ? curr(s.spent) : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Totalizador geral */}
+            {(() => {
+              const totalGasto = (grouped as any[]).reduce((s, g) => s + g.spent, 0)
+              const totalInv   = (grouped as any[]).reduce((s, g) => s + g.inventories, 0)
+              return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', borderRadius: '12px', padding: '16px 24px', color: 'white' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resumo Geral — {grouped.length} loja{grouped.length !== 1 ? 's' : ''}</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>{totalInv} inventário{totalInv !== 1 ? 's' : ''} realizados</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Inventários</div>
+                      <div style={{ fontSize: '18px', fontWeight: '800', color: '#60a5fa', marginTop: '2px' }}>{totalInv}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total Gasto</div>
+                      <div style={{ fontSize: '22px', fontWeight: '900', color: 'white', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(totalGasto)}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Tabela */}
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <th style={thSt}>Loja</th>
+                  <th style={{ ...thSt, textAlign: 'center' }}>Inventários</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Total Gasto</th>
+                </tr></thead>
+                <tbody>
+                  {(grouped as any[]).map((s: any) => (
+                    <tr key={s.name}>
+                      <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.name}</span></td>
+                      <td style={{ ...tdSt, textAlign: 'center' }}>{s.inventories > 0 ? <span style={{ background: '#dbeafe', color: '#1d4ed8', borderRadius: '20px', padding: '2px 10px', fontWeight: '700', fontSize: '12px' }}>{s.inventories} inv.</span> : '—'}</td>
+                      <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{s.spent > 0 ? curr(s.spent) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

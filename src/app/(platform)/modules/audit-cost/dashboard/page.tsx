@@ -11,13 +11,21 @@ import { formatCurrency } from '@/lib/utils'
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
 
-// Extrai { year, month, day } da string ISO sem conversão de timezone local
+// Extrai { year, month, day } sem conversão de timezone local.
+// superjson desserializa campos Date do Prisma como objetos Date, então usamos
+// .toISOString() para obter sempre a representação UTC.
 function isoYMD(d: any) {
-  const s = String(d ?? '').slice(0, 10) // "YYYY-MM-DD"
+  let iso: string
+  if (d instanceof Date) {
+    iso = d.toISOString()           // "2026-07-02T00:00:00.000Z" → sempre UTC
+  } else {
+    iso = String(d ?? '')
+  }
+  const s = iso.slice(0, 10)       // "2026-07-02"
   const [y, m, day] = s.split('-').map(Number)
-  return { year: y, month: m, day: day ?? 1 }
+  return { year: y || 0, month: m || 0, day: day || 1 }
 }
-// Cria Date UTC a partir de string ISO para comparações de range
+// Cria Date UTC para comparações de range
 function utcDate(d: any, endOfDay = false): Date {
   const { year, month, day } = isoYMD(d)
   if (endOfDay) return new Date(Date.UTC(year, month - 1, day, 23, 59, 59))
@@ -246,42 +254,74 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
         {(type === 'colaborador' || type === 'centrocusto' || type === 'pagamento') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
-              grouped.map((g: any) => (
-                <div key={g.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>{g.name}</span>
-                    <span style={{ fontWeight: '800', fontSize: '15px', color: '#2563eb' }}>{curr(g.total)}</span>
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={thSt}>Data</th>
-                          {type === 'colaborador' && <th style={thSt}>Centro de Custo</th>}
-                          {type === 'centrocusto' && <th style={thSt}>Colaborador</th>}
-                          {type === 'pagamento'   && <th style={thSt}>Colaborador</th>}
-                          <th style={thSt}>Loja</th>
-                          <th style={thSt}>Forma de Pagamento</th>
-                          <th style={{ ...thSt, textAlign: 'right' }}>Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.rows.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((e: any) => (
-                          <tr key={e.id}>
-                            <td style={tdSt}>{fmt(e.date)}</td>
-                            {type === 'colaborador' && <td style={tdSt}>{e.type ?? '—'}</td>}
-                            {type === 'centrocusto' && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
-                            {type === 'pagamento'   && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
-                            <td style={tdSt}>{e.storeName ?? '—'}</td>
-                            <td style={tdSt}>{e.paymentMethod ?? '—'}</td>
-                            <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{curr(e.value)}</td>
+              grouped.map((g: any) => {
+                const sortedRows = [...g.rows].sort((a: any, b: any) => utcDate(b.date).getTime() - utcDate(a.date).getTime())
+                const gastoTotal  = sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0)
+                const adtTotal    = sortedRows.filter((r: any) => r.paymentMethod === 'Adiantamento').reduce((s: number, r: any) => s + Number(r.value), 0)
+                return (
+                  <div key={g.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                    {/* Cabeçalho do grupo */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <div>
+                        <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{g.name}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sortedRows.length} lançamento{sortedRows.length !== 1 ? 's' : ''}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                        {adtTotal > 0 && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Adiantamento</div>
+                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#f59e0b' }}>{curr(adtTotal)}</div>
+                          </div>
+                        )}
+                        {gastoTotal > 0 && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Gasto Real</div>
+                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444' }}>{curr(gastoTotal)}</div>
+                          </div>
+                        )}
+                        <div style={{ textAlign: 'right', borderLeft: '1px solid #e2e8f0', paddingLeft: '20px' }}>
+                          <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</div>
+                          <div style={{ fontSize: '16px', fontWeight: '800', color: '#2563eb' }}>{curr(g.total)}</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr>
+                            <th style={thSt}>Data</th>
+                            {type === 'colaborador' && <th style={thSt}>Centro de Custo</th>}
+                            {type === 'centrocusto' && <th style={thSt}>Colaborador</th>}
+                            {type === 'pagamento'   && <th style={thSt}>Colaborador</th>}
+                            <th style={thSt}>Loja</th>
+                            <th style={thSt}>Forma de Pagamento</th>
+                            <th style={{ ...thSt, textAlign: 'right' }}>Valor</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {sortedRows.map((e: any) => (
+                            <tr key={e.id} style={{ background: e.paymentMethod === 'Adiantamento' ? '#fffbeb' : 'white' }}>
+                              <td style={tdSt}>{fmt(e.date)}</td>
+                              {type === 'colaborador' && <td style={tdSt}>{e.type ?? '—'}</td>}
+                              {type === 'centrocusto' && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
+                              {type === 'pagamento'   && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
+                              <td style={tdSt}>{e.storeName ?? '—'}</td>
+                              <td style={tdSt}>
+                                <span style={{
+                                  padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600',
+                                  background: e.paymentMethod === 'Adiantamento' ? '#fef3c7' : e.paymentMethod === 'Gasto' ? '#fee2e2' : '#f1f5f9',
+                                  color:      e.paymentMethod === 'Adiantamento' ? '#92400e' : e.paymentMethod === 'Gasto' ? '#991b1b' : '#475569',
+                                }}>{e.paymentMethod ?? '—'}</span>
+                              </td>
+                              <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{curr(e.value)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             }
           </div>
         )}

@@ -40,8 +40,8 @@ function Field({ label, children, half }: { label: string; children: React.React
   )
 }
 
-// Faz parse de uma linha CSV respeitando aspas
-function parseCSVLine(line: string): string[] {
+// Divide uma linha CSV usando o separador informado, respeitando campos entre aspas
+function splitLine(line: string, sep: string): string[] {
   const result: string[] = []
   let cur = ''
   let inQuotes = false
@@ -50,7 +50,7 @@ function parseCSVLine(line: string): string[] {
     if (ch === '"') {
       if (inQuotes && line[i + 1] === '"') { cur += '"'; i++ }
       else { inQuotes = !inQuotes }
-    } else if ((ch === ',' || ch === ';') && !inQuotes) {
+    } else if (ch === sep && !inQuotes) {
       result.push(cur.trim())
       cur = ''
     } else {
@@ -64,7 +64,11 @@ function parseCSVLine(line: string): string[] {
 function parseCSV(text: string): ImportRow[] {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim())
   if (lines.length < 2) return []
-  const headers = parseCSVLine(lines[0]).map(h => h.toUpperCase().replace(/[^A-Z]/g, ''))
+
+  // Detecta separador: se o cabeçalho tem >= 4 ponto-e-vírgulas usa ';', senão ','
+  const sep = (lines[0].match(/;/g) ?? []).length >= 4 ? ';' : ','
+
+  const headers = splitLine(lines[0], sep).map(h => h.toUpperCase().replace(/[^A-Z]/g, ''))
 
   const colIdx = (keys: string[]) => {
     for (const k of keys) {
@@ -78,15 +82,45 @@ function parseCSV(text: string): ImportRow[] {
   const iEmpresa  = colIdx(['EMPRESA', 'RAZAOSOCIAL', 'NOME'])
   const iCnpj     = colIdx(['CNPJ'])
   const iFantasia = colIdx(['FANTASIA', 'NOMEFANTASIA'])
-  const iEndereco = colIdx(['ENDERECOS', 'ENDERECO', 'ENDEREÇO', 'ENDERECOS'])
+  const iEndereco = colIdx(['ENDERECOS', 'ENDERECO', 'ENDEREÇOS', 'ENDERECOSS'])
   const iCidade   = colIdx(['CIDADE', 'CITY'])
   const iEstado   = colIdx(['ESTADO', 'UF', 'STATE'])
   const iGerente  = colIdx(['GERENTE', 'MANAGER', 'RESPONSAVEL'])
-  const iGestao   = colIdx(['GESTAO', 'GESTÃO', 'GESTÃOO', 'REGIONAL', 'FRANQUEADO'])
+  const iGestao   = colIdx(['GESTAO', 'GESTÃO', 'REGIONAL', 'FRANQUEADO'])
+
+  // Com vírgula como separador, o campo ENDERECOS pode conter vírgulas internas
+  // não escapadas — nesse caso a linha terá mais colunas que o esperado.
+  // Estratégia: ancoragem pelo final (as 4 últimas cols são CIDADE/ESTADO/GERENTE/GESTAO)
+  // e tudo entre FANTASIA e CIDADE é reagrupado como endereço.
+  const totalHeaderCols = headers.length   // ex: 9
+  const hasAddress = iEndereco >= 0
+  // colunas fixas à esquerda antes do endereço (0..iEndereco-1)
+  const leftFixed = iEndereco              // ex: 4
+  // colunas fixas à direita depois do endereço
+  const rightFixed = (totalHeaderCols - 1) - iEstado  // colunas depois de CIDADE (ESTADO,GERENTE,GESTAO = 3)
+  // posição relativa de CIDADE a partir do final
+  const cidadeFromEnd = (totalHeaderCols - 1) - iCidade  // ex: 3 (4ª do fim)
 
   return lines.slice(1).map(line => {
-    const cols = parseCSVLine(line)
-    const get = (i: number) => (i >= 0 ? cols[i] ?? '' : '').trim()
+    const cols = splitLine(line, sep)
+
+    let get: (headerIdx: number) => string
+
+    if (sep === ',' && hasAddress && cols.length > totalHeaderCols) {
+      // Linha com mais colunas que o cabeçalho → endereço não estava entre aspas
+      // Ancora: left 0..leftFixed-1, right os últimos (rightFixed+1) campos
+      const extra = cols.length - totalHeaderCols   // vírgulas extras no endereço
+      get = (hi: number) => {
+        if (hi < leftFixed) return cols[hi]?.trim() ?? ''
+        if (hi === iEndereco) return cols.slice(leftFixed, leftFixed + 1 + extra).join(', ').trim()
+        // colunas à direita: CIDADE, ESTADO, GERENTE, GESTAO
+        const fromEnd = (totalHeaderCols - 1) - hi
+        return cols[cols.length - 1 - fromEnd]?.trim() ?? ''
+      }
+    } else {
+      get = (hi: number) => (hi >= 0 ? cols[hi] ?? '' : '').trim()
+    }
+
     const code = get(iCodigo)
     const name = get(iEmpresa)
     const row: ImportRow = {

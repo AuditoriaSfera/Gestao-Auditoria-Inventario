@@ -408,62 +408,129 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
         {/* Dias em viagem */}
         {type === 'dias' && (
           filteredTrips.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhuma viagem encontrada.</div> :
-          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <th style={thSt}>Colaborador</th>
-                <th style={thSt}>Destino / Lojas</th>
-                <th style={thSt}>Período</th>
-                <th style={thSt}>Motivo</th>
-                <th style={{ ...thSt, textAlign: 'center' }}>Dias</th>
-              </tr></thead>
-              <tbody>
-                {filteredTrips.sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map((t: any) => {
-                  const s = new Date(t.startDate); const e = t.endDate ? new Date(t.endDate) : new Date(t.startDate)
-                  let days = 0; const cur = new Date(s); while (cur <= e) { days++; cur.setDate(cur.getDate() + 1) }
-                  return (
-                    <tr key={t.id}>
-                      <td style={tdSt}><span style={{ fontWeight: '600' }}>{collabName(t.collaboratorId)}</span></td>
-                      <td style={tdSt}><div>{t.city}{t.state ? `/${t.state}` : ''}</div>{t.stores && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.stores}</div>}</td>
-                      <td style={tdSt}>{fmt(t.startDate)} → {fmt(t.endDate)}</td>
-                      <td style={tdSt}>{t.reason ?? '—'}</td>
-                      <td style={{ ...tdSt, textAlign: 'center', fontWeight: '700' }}>{days}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Totalizador geral */}
+            {(() => {
+              let totalDias = 0
+              const collabSet = new Set<string>()
+              for (const t of filteredTrips) {
+                const s = utcDate(t.startDate)
+                const e = t.endDate ? utcDate(t.endDate, true) : utcDate(t.startDate, true)
+                const ms = e.getTime() - s.getTime()
+                totalDias += Math.round(ms / 86400000) + 1
+                if (t.collaboratorId) collabSet.add(t.collaboratorId)
+              }
+              return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', borderRadius: '12px', padding: '16px 24px', color: 'white' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resumo Geral — {filteredTrips.length} viagem{filteredTrips.length !== 1 ? 's' : ''}</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>{collabSet.size} colaborador{collabSet.size !== 1 ? 'es' : ''} em viagem</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Viagens</div>
+                      <div style={{ fontSize: '18px', fontWeight: '800', color: '#60a5fa', marginTop: '2px' }}>{filteredTrips.length}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total de Dias</div>
+                      <div style={{ fontSize: '28px', fontWeight: '900', color: 'white', marginTop: '2px', letterSpacing: '-0.02em' }}>{totalDias} <span style={{ fontSize: '14px', fontWeight: '400', color: '#94a3b8' }}>dias</span></div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Tabela */}
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <th style={thSt}>Colaborador</th>
+                  <th style={thSt}>Destino / Lojas</th>
+                  <th style={thSt}>Período</th>
+                  <th style={thSt}>Motivo</th>
+                  <th style={{ ...thSt, textAlign: 'center' }}>Dias</th>
+                </tr></thead>
+                <tbody>
+                  {filteredTrips.sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map((t: any) => {
+                    const s = utcDate(t.startDate)
+                    const e = t.endDate ? utcDate(t.endDate, true) : utcDate(t.startDate, true)
+                    const days = Math.round((e.getTime() - s.getTime()) / 86400000) + 1
+                    return (
+                      <tr key={t.id}>
+                        <td style={tdSt}><span style={{ fontWeight: '600' }}>{collabName(t.collaboratorId)}</span></td>
+                        <td style={tdSt}><div>{t.city}{t.state ? `/${t.state}` : ''}</div>{t.stores && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t.stores}</div>}</td>
+                        <td style={tdSt}>{fmt(t.startDate)} → {fmt(t.endDate)}</td>
+                        <td style={tdSt}>{t.reason ?? '—'}</td>
+                        <td style={{ ...tdSt, textAlign: 'center', fontWeight: '700' }}>{days}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {/* Pessoal */}
         {type === 'pessoal' && (
           salFiltered.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhum registro encontrado.</div> :
-          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>
-                <th style={thSt}>Colaborador</th>
-                <th style={thSt}>Cargo</th>
-                <th style={thSt}>Time</th>
-                <th style={thSt}>Vigência</th>
-                <th style={{ ...thSt, textAlign: 'right' }}>Salário Base</th>
-                <th style={{ ...thSt, textAlign: 'right' }}>Encargos</th>
-                <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
-              </tr></thead>
-              <tbody>
-                {salFiltered.map((s: any) => (
-                  <tr key={s.id}>
-                    <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.collaborator?.name ?? '—'}</span></td>
-                    <td style={tdSt}>{s.cargo ?? '—'}</td>
-                    <td style={tdSt}><span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: s.tipoTime === 'campo' ? '#e0f2fe' : '#ede9fe', color: s.tipoTime === 'campo' ? '#0369a1' : '#6d28d9' }}>{s.tipoTime === 'campo' ? '🏃 Campo' : '🖥️ Adm.'}</span></td>
-                    <td style={tdSt}>{fmt(s.vigenciaInicio)}{s.vigenciaFim ? ` → ${fmt(s.vigenciaFim)}` : ' → atual'}</td>
-                    <td style={{ ...tdSt, textAlign: 'right' }}>{curr(s.salarioBase)}</td>
-                    <td style={{ ...tdSt, textAlign: 'right' }}>{curr(s.encargos)}</td>
-                    <td style={{ ...tdSt, textAlign: 'right', fontWeight: '800', color: '#0f172a' }}>{curr(Number(s.salarioBase) + Number(s.encargos))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Totalizador geral */}
+            {(() => {
+              const totalSalario = salFiltered.reduce((s: number, r: any) => s + Number(r.salarioBase), 0)
+              const totalEncargos = salFiltered.reduce((s: number, r: any) => s + Number(r.encargos), 0)
+              const totalGeral = totalSalario + totalEncargos
+              const campo = salFiltered.filter((r: any) => r.tipoTime === 'campo').length
+              const adm   = salFiltered.filter((r: any) => r.tipoTime !== 'campo').length
+              return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', borderRadius: '12px', padding: '16px 24px', color: 'white' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resumo Geral — {salFiltered.length} colaborador{salFiltered.length !== 1 ? 'es' : ''}</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>{campo} campo · {adm} adm</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Salários</div>
+                      <div style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa', marginTop: '2px' }}>{curr(totalSalario)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Encargos</div>
+                      <div style={{ fontSize: '15px', fontWeight: '700', color: '#f59e0b', marginTop: '2px' }}>{curr(totalEncargos)}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total de Pessoal</div>
+                      <div style={{ fontSize: '22px', fontWeight: '900', color: 'white', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(totalGeral)}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Tabela */}
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <th style={thSt}>Colaborador</th>
+                  <th style={thSt}>Cargo</th>
+                  <th style={thSt}>Time</th>
+                  <th style={thSt}>Vigência</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Salário Base</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Encargos</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Total</th>
+                </tr></thead>
+                <tbody>
+                  {salFiltered.map((s: any) => (
+                    <tr key={s.id}>
+                      <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.collaborator?.name ?? '—'}</span></td>
+                      <td style={tdSt}>{s.cargo ?? '—'}</td>
+                      <td style={tdSt}><span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: s.tipoTime === 'campo' ? '#e0f2fe' : '#ede9fe', color: s.tipoTime === 'campo' ? '#0369a1' : '#6d28d9' }}>{s.tipoTime === 'campo' ? '🏃 Campo' : '🖥️ Adm.'}</span></td>
+                      <td style={tdSt}>{fmt(s.vigenciaInicio)}{s.vigenciaFim ? ` → ${fmt(s.vigenciaFim)}` : ' → atual'}</td>
+                      <td style={{ ...tdSt, textAlign: 'right' }}>{curr(s.salarioBase)}</td>
+                      <td style={{ ...tdSt, textAlign: 'right' }}>{curr(s.encargos)}</td>
+                      <td style={{ ...tdSt, textAlign: 'right', fontWeight: '800', color: '#0f172a' }}>{curr(Number(s.salarioBase) + Number(s.encargos))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

@@ -181,7 +181,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
       const secondCol = type === 'colaborador' ? 'Centro de Custo' : 'Colaborador'
       rows.push(['Data', secondCol, 'Loja', 'Forma de Pagamento', 'Valor'])
       for (const g of grouped as any[]) {
-        for (const e of [...g.rows].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())) {
+        for (const e of [...g.rows].filter((r: any) => r.paymentMethod !== 'Adiantamento').sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())) {
           const secondVal = type === 'colaborador' ? (e.type ?? '') : collabName(e.collaboratorId ?? e.auditorId)
           rows.push([fmt(e.date), secondVal, e.storeName ?? '', e.paymentMethod ?? '', Number(e.value).toFixed(2).replace('.', ',')])
         }

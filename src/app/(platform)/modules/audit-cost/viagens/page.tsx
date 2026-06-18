@@ -237,7 +237,7 @@ function CollabMultiSelect({ collabs, selectedIds, onChange }: { collabs: any[];
 }
 
 // ─── Multi-select inline para Loja do dia ────────────────────────────────────
-function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
+function LojasDoDiaSelect({ options, selected, onChange }: { options: StoreOption[]; selected: string[]; onChange: (v: string[]) => void }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
@@ -259,9 +259,12 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
     setOpen(o => !o)
   }
 
-  function toggle(s: string) { onChange(selected.includes(s) ? selected.filter(x => x !== s) : [...selected, s]) }
+  function toggle(name: string) { onChange(selected.includes(name) ? selected.filter(x => x !== name) : [...selected, name]) }
   const allSelected = options.length > 0 && selected.length === options.length
-  const label = selected.length === 0 ? null : allSelected ? `Todas (${options.length})` : selected.length > 1 ? `${selected.length} lojas` : selected[0]
+  const selLabel = selected.length === 0 ? null
+    : allSelected ? `Todas (${options.length})`
+    : selected.length > 1 ? `${selected.length} lojas`
+    : (options.find(o => o.name === selected[0])?.label ?? selected[0])
 
   const spaceBelow = rect ? window.innerHeight - rect.bottom : 400
   const openAbove = spaceBelow < 260
@@ -283,19 +286,19 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   const dropdown = open && rect ? (
     <div ref={dropRef} style={dropStyle}>
       <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
-        <button onClick={() => onChange([...options])} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
+        <button onClick={() => onChange(options.map(o => o.name))} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
         <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
       </div>
-      {options.map(s => {
-        const isSel = selected.includes(s)
+      {options.map(opt => {
+        const isSel = selected.includes(opt.name)
         return (
-          <div key={s} onClick={() => toggle(s)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
+          <div key={opt.name} onClick={() => toggle(opt.name)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
             onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
             onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
             <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
             </div>
-            <span style={{ fontSize: '13px', color: '#0f172a' }}>{s}</span>
+            <span style={{ fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
           </div>
         )
       })}
@@ -308,7 +311,7 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
   return (
     <div ref={triggerRef}>
       <div onClick={handleToggle} style={{ ...inpSm, cursor: 'pointer', minHeight: '38px', display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '13px', color: label ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{label ?? 'Selecionar loja...'}</span>
+        <span style={{ fontSize: '13px', color: selLabel ? '#0f172a' : '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{selLabel ?? 'Selecionar loja...'}</span>
         <span style={{ color: '#94a3b8', fontSize: '10px', flexShrink: 0, marginLeft: '6px' }}>{open ? '▲' : '▼'}</span>
       </div>
       {typeof document !== 'undefined' && dropdown ? createPortal(dropdown, document.body) : null}
@@ -318,12 +321,13 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: string[]; 
 
 // ─── Tabela Diária de Colaborador ─────────────────────────────────────────────
 type DayRow = { storeNames: string[]; values: Record<string, string> }
+type StoreOption = { name: string; label: string }
 
 function TabelaDiaria({
   dates, storeOptions, tipos, rows, onChange
 }: {
   dates: string[]
-  storeOptions: string[]
+  storeOptions: StoreOption[]
   tipos: string[]
   rows: Record<string, DayRow>
   onChange: (rows: Record<string, DayRow>) => void
@@ -460,7 +464,10 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
   const tipos = costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
   const dates = generateDates(startDate, endDate)
   const selectedStores = storesList.filter(s => selectedStoreIds.includes(s.id))
-  const storeOptions = selectedStores.map((s: any) => s.name)
+  const storeOptions: StoreOption[] = selectedStores.map((s: any) => ({
+    name: s.name,
+    label: s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name),
+  }))
 
   // Auto-fill cidade/estado da primeira loja selecionada
   const firstStore = selectedStores[0]

@@ -134,4 +134,39 @@ export const storesRouter = createTRPCRouter({
         data: { deletedAt: new Date() },
       })
     }),
+
+  bulkCreate: protectedProcedure
+    .input(
+      z.object({
+        stores: z.array(
+          z.object({
+            code: z.string().min(1),
+            name: z.string().min(2),
+            tradeName: z.string().optional(),
+            cnpj: z.string().optional(),
+            address: z.string().optional(),
+            city: z.string().optional(),
+            state: z.string().optional(),
+          })
+        ),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.db.store.findMany({
+        where: { code: { in: input.stores.map(s => s.code) }, deletedAt: null },
+        select: { code: true },
+      })
+      const existingCodes = new Set(existing.map(s => s.code))
+      const toCreate = input.stores.filter(s => !existingCodes.has(s.code))
+      const skipped = input.stores.filter(s => existingCodes.has(s.code)).map(s => s.code)
+
+      if (toCreate.length > 0) {
+        await ctx.db.store.createMany({
+          data: toCreate.map(s => ({ ...s, createdBy: ctx.session.user.id })),
+          skipDuplicates: true,
+        })
+      }
+
+      return { created: toCreate.length, skipped }
+    }),
 })

@@ -265,7 +265,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                       {/* Nome + contagem */}
                       <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{g.name}</div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sortedRows.length} lançamento{sortedRows.length !== 1 ? 's' : ''}</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').length} lançamento{sortedRows.filter((r: any) => r.paymentMethod !== 'Adiantamento').length !== 1 ? 's' : ''}</div>
                       </div>
                       {/* Totalizadores */}
                       <div style={{ display: 'flex', alignItems: 'stretch' }}>
@@ -302,8 +302,8 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                           </tr>
                         </thead>
                         <tbody>
-                          {sortedRows.map((e: any) => (
-                            <tr key={e.id} style={{ background: e.paymentMethod === 'Adiantamento' ? '#fffbeb' : 'white' }}>
+                          {sortedRows.filter((e: any) => e.paymentMethod !== 'Adiantamento').map((e: any) => (
+                            <tr key={e.id}>
                               <td style={tdSt}>{fmt(e.date)}</td>
                               {type === 'colaborador' && <td style={tdSt}>{e.type ?? '—'}</td>}
                               {type === 'centrocusto' && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}

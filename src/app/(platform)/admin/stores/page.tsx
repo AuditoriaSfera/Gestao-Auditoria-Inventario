@@ -102,6 +102,7 @@ function parseCSV(text: string): ImportRow[] {
     }
     if (!code) row._error = 'Código obrigatório'
     else if (!name) row._error = 'Empresa obrigatória'
+    else if (!row.gestao) row._error = 'Gestão obrigatória'
     return row
   }).filter(r => r.code || r.name)
 }
@@ -317,12 +318,13 @@ export default function StoresPage() {
         <Field label="Cidade" half><input style={inputStyle} value={form.city} onChange={e => set('city', e.target.value)} placeholder="Ex: São Paulo" /></Field>
         <Field label="Estado" half><input style={inputStyle} value={form.state} onChange={e => set('state', e.target.value.toUpperCase())} maxLength={2} placeholder="SP" /></Field>
         <Field label="Gerente" half><input style={inputStyle} value={form.managerName} onChange={e => set('managerName', e.target.value)} placeholder="Nome do gerente" /></Field>
-        <Field label="Gestão" half><input style={inputStyle} value={form.gestao} onChange={e => set('gestao', e.target.value)} placeholder="Ex: Cantieri, Mafortes" /></Field>
+        <Field label="Gestão *" half><input style={inputStyle} value={form.gestao} onChange={e => set('gestao', e.target.value)} placeholder="Ex: Cantieri, Mafortes" /></Field>
       </div>
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
         <Btn variant="outline" onClick={() => { isEdit ? setEditStore(null) : setShowCreate(false); setError('') }}>Cancelar</Btn>
         <Btn onClick={() => {
           if (!form.code || !form.name) { setError('Código e razão social são obrigatórios.'); return }
+          if (!form.gestao) { setError('O campo Gestão é obrigatório.'); return }
           if (isEdit) updateMut.mutate({ id: editStore.id, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined, managerName: form.managerName || undefined, gestao: form.gestao || undefined })
           else createMut.mutate({ code: form.code, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined, managerName: form.managerName || undefined, gestao: form.gestao || undefined })
         }} disabled={createMut.isPending || updateMut.isPending}>

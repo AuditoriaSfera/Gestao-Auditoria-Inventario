@@ -95,7 +95,7 @@ export const storesRouter = createTRPCRouter({
         phone: z.string().optional(),
         email: z.string().email().optional(),
         managerName: z.string().optional(),
-        gestao: z.string().optional(),
+        gestao: z.string().min(1, 'Gestão é obrigatória'),
         openedAt: z.date().optional(),
       })
     )
@@ -152,7 +152,7 @@ export const storesRouter = createTRPCRouter({
             city: z.string().optional(),
             state: z.string().optional(),
             managerName: z.string().optional(),
-            gestao: z.string().optional(),
+            gestao: z.string().min(1, 'Gestão é obrigatória'),
           })
         ),
       })

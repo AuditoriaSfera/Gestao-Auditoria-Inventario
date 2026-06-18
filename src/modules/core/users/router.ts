@@ -199,6 +199,44 @@ export const usersRouter = createTRPCRouter({
     })
   }),
 
+  getRolePermissions: protectedProcedure
+    .input(z.object({ roleId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const role = await ctx.db.role.findUniqueOrThrow({
+        where: { id: input.roleId },
+        include: { permissions: { include: { permission: true } } },
+      })
+      return {
+        role: { id: role.id, name: role.name, label: role.label },
+        current: role.permissions.map(rp => `${rp.permission.module}:${rp.permission.action}`),
+      }
+    }),
+
+  setRolePermissions: protectedProcedure
+    .input(z.object({
+      roleId: z.string(),
+      keys: z.array(z.string()), // "module:action"
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const permIds: string[] = []
+      for (const key of input.keys) {
+        const [module, action] = key.split(':')
+        let perm = await ctx.db.permission.findFirst({ where: { module, action, scope: null } })
+        if (!perm) {
+          perm = await ctx.db.permission.create({ data: { module, action, label: `${module}:${action}` } })
+        }
+        permIds.push(perm.id)
+      }
+      await ctx.db.rolePermission.deleteMany({ where: { roleId: input.roleId } })
+      if (permIds.length > 0) {
+        await ctx.db.rolePermission.createMany({
+          data: permIds.map(permissionId => ({ roleId: input.roleId, permissionId })),
+          skipDuplicates: true,
+        })
+      }
+      return { success: true }
+    }),
+
   softDelete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {

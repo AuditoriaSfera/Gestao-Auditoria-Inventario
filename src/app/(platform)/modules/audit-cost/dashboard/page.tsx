@@ -261,27 +261,30 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                 return (
                   <div key={g.name} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
                     {/* Cabeçalho do grupo */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                      <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                      {/* Nome + contagem */}
+                      <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{g.name}</div>
                         <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{sortedRows.length} lançamento{sortedRows.length !== 1 ? 's' : ''}</div>
                       </div>
-                      <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                      {/* Totalizadores */}
+                      <div style={{ display: 'flex', alignItems: 'stretch' }}>
                         {adtTotal > 0 && (
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Adiantamento</div>
-                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#f59e0b' }}>{curr(adtTotal)}</div>
+                          <div style={{ padding: '12px 20px', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end' }}>
+                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Adiantamento</div>
+                            <div style={{ fontSize: '14px', fontWeight: '700', color: '#d97706', marginTop: '2px' }}>{curr(adtTotal)}</div>
                           </div>
                         )}
                         {gastoTotal > 0 && (
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Gasto Real</div>
-                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444' }}>{curr(gastoTotal)}</div>
+                          <div style={{ padding: '12px 20px', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end' }}>
+                            <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gasto Real</div>
+                            <div style={{ fontSize: '14px', fontWeight: '700', color: '#dc2626', marginTop: '2px' }}>{curr(gastoTotal)}</div>
                           </div>
                         )}
-                        <div style={{ textAlign: 'right', borderLeft: '1px solid #e2e8f0', paddingLeft: '20px' }}>
-                          <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total</div>
-                          <div style={{ fontSize: '16px', fontWeight: '800', color: '#2563eb' }}>{curr(g.total)}</div>
+                        {/* Total — visualmente destacado como totalizador */}
+                        <div style={{ padding: '0 24px', borderLeft: '2px solid #2563eb', background: '#eff6ff', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-end', minWidth: '130px' }}>
+                          <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Total Geral</div>
+                          <div style={{ fontSize: '20px', fontWeight: '900', color: '#1d4ed8', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(g.total)}</div>
                         </div>
                       </div>
                     </div>

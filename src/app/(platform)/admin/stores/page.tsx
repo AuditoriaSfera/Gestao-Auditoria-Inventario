@@ -9,12 +9,12 @@ import { ModulePage, DataCard, StatusBadge, EmptyState, LoadingState, Btn } from
 const STATUS_LABELS: Record<string, string> = { ACTIVE: 'Ativa', INACTIVE: 'Inativa', CLOSED: 'Fechada' }
 
 // Colunas do modelo de importação
-const TEMPLATE_COLS = ['CODIGO', 'EMPRESA', 'CNPJ', 'FANTASIA', 'ENDERECOS', 'CIDADE', 'ESTADO']
+const TEMPLATE_COLS = ['CODIGO', 'EMPRESA', 'CNPJ', 'FANTASIA', 'ENDERECOS', 'CIDADE', 'ESTADO', 'GERENTE', 'GESTAO']
 
-type StoreForm = { code: string; name: string; tradeName: string; city: string; state: string }
-const emptyForm = (): StoreForm => ({ code: '', name: '', tradeName: '', city: '', state: '' })
+type StoreForm = { code: string; name: string; tradeName: string; city: string; state: string; managerName: string; gestao: string }
+const emptyForm = (): StoreForm => ({ code: '', name: '', tradeName: '', city: '', state: '', managerName: '', gestao: '' })
 
-type ImportRow = { code: string; name: string; cnpj: string; tradeName: string; address: string; city: string; state: string; _error?: string }
+type ImportRow = { code: string; name: string; cnpj: string; tradeName: string; address: string; city: string; state: string; managerName: string; gestao: string; _error?: string }
 
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
@@ -81,6 +81,8 @@ function parseCSV(text: string): ImportRow[] {
   const iEndereco = colIdx(['ENDERECOS', 'ENDERECO', 'ENDEREÇO', 'ENDERECOS'])
   const iCidade   = colIdx(['CIDADE', 'CITY'])
   const iEstado   = colIdx(['ESTADO', 'UF', 'STATE'])
+  const iGerente  = colIdx(['GERENTE', 'MANAGER', 'RESPONSAVEL'])
+  const iGestao   = colIdx(['GESTAO', 'GESTÃO', 'GESTÃOO', 'REGIONAL', 'FRANQUEADO'])
 
   return lines.slice(1).map(line => {
     const cols = parseCSVLine(line)
@@ -90,11 +92,13 @@ function parseCSV(text: string): ImportRow[] {
     const row: ImportRow = {
       code,
       name,
-      cnpj:      get(iCnpj),
-      tradeName: get(iFantasia),
-      address:   get(iEndereco),
-      city:      get(iCidade),
-      state:     get(iEstado).toUpperCase().slice(0, 2),
+      cnpj:        get(iCnpj),
+      tradeName:   get(iFantasia),
+      address:     get(iEndereco),
+      city:        get(iCidade),
+      state:       get(iEstado).toUpperCase().slice(0, 2),
+      managerName: get(iGerente),
+      gestao:      get(iGestao),
     }
     if (!code) row._error = 'Código obrigatório'
     else if (!name) row._error = 'Empresa obrigatória'
@@ -106,8 +110,8 @@ function downloadTemplate() {
   const BOM = '﻿'
   const header = TEMPLATE_COLS.join(';')
   const example = [
-    '23452;Boticário Carangola;57.189.430/0004-63;Boticário Carangola;Rua Pedro de Oliveira, 154, Centro;Carangola;MG',
-    '21478;Boticário Carrefour (JF);14.477.305/0010-94;Boticário Carrefour (JF);Avenida Presidente João Goulart, nº 5.001;Juiz de Fora;MG',
+    '23452;Boticário Carangola;57.189.430/0004-63;Boticário Carangola;Rua Pedro de Oliveira, 154, Centro;Carangola;MG;Mariana Gomes;Mafortes',
+    '21478;Boticário Carrefour (JF);14.477.305/0010-94;Boticário Carrefour (JF);Avenida Presidente João Goulart, nº 5.001;Juiz de Fora;MG;Daniele Santos;Cantieri',
   ].join('\n')
   const csv = BOM + header + '\n' + example
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -171,7 +175,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         <div style={{ fontWeight: '700', color: '#1d4ed8', fontSize: '13px', marginBottom: '6px' }}>📋 Como importar</div>
         <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#475569', lineHeight: '1.7' }}>
           <li>Baixe o modelo CSV abaixo e preencha os dados das lojas</li>
-          <li>Colunas: <strong>CODIGO, EMPRESA, CNPJ, FANTASIA, ENDERECOS, CIDADE, ESTADO</strong></li>
+          <li>Colunas: <strong>CODIGO, EMPRESA, CNPJ, FANTASIA, ENDERECOS, CIDADE, ESTADO, GERENTE, GESTAO</strong></li>
           <li>Use <strong>ponto e vírgula (;)</strong> como separador</li>
           <li>Lojas com código já existente serão ignoradas automaticamente</li>
         </ul>
@@ -224,7 +228,7 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
-                  {['Código', 'Empresa', 'CNPJ', 'Fantasia', 'Cidade', 'UF', 'Status'].map(h => (
+                  {['Código', 'Empresa', 'CNPJ', 'Fantasia', 'Cidade', 'UF', 'Gerente', 'Gestão', 'Status'].map(h => (
                     <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontWeight: '700', color: '#64748b', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
                   ))}
                 </tr>
@@ -238,6 +242,8 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                     <td style={{ padding: '7px 10px', color: '#64748b' }}>{r.tradeName || '—'}</td>
                     <td style={{ padding: '7px 10px', color: '#64748b' }}>{r.city || '—'}</td>
                     <td style={{ padding: '7px 10px', color: '#64748b' }}>{r.state || '—'}</td>
+                    <td style={{ padding: '7px 10px', color: '#64748b' }}>{r.managerName || '—'}</td>
+                    <td style={{ padding: '7px 10px', color: '#64748b' }}>{r.gestao || '—'}</td>
                     <td style={{ padding: '7px 10px' }}>
                       {r._error
                         ? <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: '600' }}>⚠ {r._error}</span>
@@ -294,7 +300,7 @@ export default function StoresPage() {
   })
 
   function openEdit(s: any) {
-    setForm({ code: s.code, name: s.name, tradeName: s.tradeName ?? '', city: s.city ?? '', state: s.state ?? '' })
+    setForm({ code: s.code, name: s.name, tradeName: s.tradeName ?? '', city: s.city ?? '', state: s.state ?? '', managerName: s.managerName ?? '', gestao: s.gestao ?? '' })
     setEditStore(s)
     setError('')
   }
@@ -310,13 +316,15 @@ export default function StoresPage() {
         <Field label="Nome Fantasia" half><input style={inputStyle} value={form.tradeName} onChange={e => set('tradeName', e.target.value)} placeholder="Nome comercial" /></Field>
         <Field label="Cidade" half><input style={inputStyle} value={form.city} onChange={e => set('city', e.target.value)} placeholder="Ex: São Paulo" /></Field>
         <Field label="Estado" half><input style={inputStyle} value={form.state} onChange={e => set('state', e.target.value.toUpperCase())} maxLength={2} placeholder="SP" /></Field>
+        <Field label="Gerente" half><input style={inputStyle} value={form.managerName} onChange={e => set('managerName', e.target.value)} placeholder="Nome do gerente" /></Field>
+        <Field label="Gestão" half><input style={inputStyle} value={form.gestao} onChange={e => set('gestao', e.target.value)} placeholder="Ex: Cantieri, Mafortes" /></Field>
       </div>
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
         <Btn variant="outline" onClick={() => { isEdit ? setEditStore(null) : setShowCreate(false); setError('') }}>Cancelar</Btn>
         <Btn onClick={() => {
           if (!form.code || !form.name) { setError('Código e razão social são obrigatórios.'); return }
-          if (isEdit) updateMut.mutate({ id: editStore.id, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined })
-          else createMut.mutate({ code: form.code, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined })
+          if (isEdit) updateMut.mutate({ id: editStore.id, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined, managerName: form.managerName || undefined, gestao: form.gestao || undefined })
+          else createMut.mutate({ code: form.code, name: form.name, tradeName: form.tradeName || undefined, city: form.city || undefined, state: form.state || undefined, managerName: form.managerName || undefined, gestao: form.gestao || undefined })
         }} disabled={createMut.isPending || updateMut.isPending}>
           {createMut.isPending || updateMut.isPending ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar Loja'}
         </Btn>
@@ -381,7 +389,7 @@ export default function StoresPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                  {['Código', 'Nome', 'Regional', 'Cidade/UF', 'Status', 'Ações'].map(h => (
+                  {['Código', 'Nome', 'Gestão', 'Gerente', 'Cidade/UF', 'Status', 'Ações'].map(h => (
                     <th key={h} style={{ textAlign: 'left', padding: '10px 12px', fontSize: '12px', fontWeight: '600', color: '#64748b', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
@@ -396,7 +404,8 @@ export default function StoresPage() {
                       <div style={{ fontWeight: '500', color: '#0f172a' }}>{s.name}</div>
                       {s.tradeName && <div style={{ fontSize: '12px', color: '#94a3b8' }}>{s.tradeName}</div>}
                     </td>
-                    <td style={{ padding: '12px', color: '#64748b' }}>{s.region?.name ?? '—'}</td>
+                    <td style={{ padding: '12px', color: '#64748b' }}>{s.gestao ?? '—'}</td>
+                    <td style={{ padding: '12px', color: '#64748b' }}>{s.managerName ?? '—'}</td>
                     <td style={{ padding: '12px', color: '#64748b' }}>{s.city ? `${s.city}/${s.state}` : '—'}</td>
                     <td style={{ padding: '12px' }}><StatusBadge status={s.status} label={STATUS_LABELS[s.status] || s.status} /></td>
                     <td style={{ padding: '12px' }}>

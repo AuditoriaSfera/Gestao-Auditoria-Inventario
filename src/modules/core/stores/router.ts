@@ -94,6 +94,8 @@ export const storesRouter = createTRPCRouter({
         zipCode: z.string().optional(),
         phone: z.string().optional(),
         email: z.string().email().optional(),
+        managerName: z.string().optional(),
+        gestao: z.string().optional(),
         openedAt: z.date().optional(),
       })
     )
@@ -116,6 +118,8 @@ export const storesRouter = createTRPCRouter({
         state: z.string().optional(),
         phone: z.string().optional(),
         email: z.string().email().optional(),
+        managerName: z.string().optional(),
+        gestao: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -147,6 +151,8 @@ export const storesRouter = createTRPCRouter({
             address: z.string().optional(),
             city: z.string().optional(),
             state: z.string().optional(),
+            managerName: z.string().optional(),
+            gestao: z.string().optional(),
           })
         ),
       })

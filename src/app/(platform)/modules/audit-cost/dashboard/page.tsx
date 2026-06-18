@@ -45,11 +45,12 @@ function ClickableCard({ children, onClick }: { children: React.ReactNode; onCli
 }
 
 // ── Detalhe em tela cheia ─────────────────────────────────────────────────────
-function DetailView({ type, onClose, expenses, trips, salaries, collabs, selectedPeriods, effectiveCollabs }: {
-  type: 'colaborador' | 'centrocusto' | 'pagamento' | 'loja' | 'dias' | 'pessoal'
+function DetailView({ type, onClose, expenses, trips, salaries, collabs, selectedPeriods, effectiveCollabs, storeGestaoMap }: {
+  type: 'colaborador' | 'centrocusto' | 'pagamento' | 'loja' | 'dias' | 'pessoal' | 'gestao'
   onClose: () => void
   expenses: any[]; trips: any[]; salaries: any[]; collabs: any[]
   selectedPeriods: string[]; effectiveCollabs: string[]
+  storeGestaoMap: Map<string, string>
 }) {
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -62,6 +63,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
     loja: 'Gastos e Inventários por Loja',
     dias: 'Dias em Viagem por Colaborador',
     pessoal: 'Custo de Pessoal por Colaborador',
+    gestao: 'Custo por Gestão',
   }
 
   // Filtra despesas respeitando os filtros do detail
@@ -156,8 +158,26 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
       }
       return [...map.values()].sort((a, b) => b.inventories - a.inventories || b.spent - a.spent)
     }
+    if (type === 'gestao') {
+      const map = new Map<string, { name: string; spent: number; inventories: number; stores: Set<string>; rows: any[] }>()
+      for (const e of filtered) {
+        if (!e.storeName) continue
+        const gestao = storeGestaoMap.get(e.storeName) ?? 'Não informado'
+        const prev = map.get(gestao) ?? { name: gestao, spent: 0, inventories: 0, stores: new Set(), rows: [] }
+        map.set(gestao, { ...prev, spent: prev.spent + Number(e.value), stores: new Set([...prev.stores, e.storeName]), rows: [...prev.rows, e] })
+      }
+      for (const t of filteredTrips) {
+        if (!t.stores) continue
+        for (const sn of t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+          const gestao = storeGestaoMap.get(sn) ?? 'Não informado'
+          const prev = map.get(gestao) ?? { name: gestao, spent: 0, inventories: 0, stores: new Set(), rows: [] }
+          map.set(gestao, { ...prev, inventories: prev.inventories + 1 })
+        }
+      }
+      return [...map.values()].map(g => ({ ...g, storeCount: g.stores.size })).sort((a, b) => b.spent - a.spent)
+    }
     return []
-  }, [type, filtered, filteredTrips, collabs])
+  }, [type, filtered, filteredTrips, collabs, storeGestaoMap])
 
   const salFiltered = useMemo(() => {
     if (type !== 'pessoal') return []
@@ -190,6 +210,11 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
       rows.push(['Loja', 'Inventários', 'Total Gasto'])
       for (const s of grouped as any[]) {
         rows.push([s.name, String(s.inventories), Number(s.spent).toFixed(2).replace('.', ',')])
+      }
+    } else if (type === 'gestao') {
+      rows.push(['Gestão', 'Lojas', 'Inventários', 'Total Gasto'])
+      for (const g of grouped as any[]) {
+        rows.push([g.name, String(g.storeCount ?? 0), String(g.inventories), Number(g.spent).toFixed(2).replace('.', ',')])
       }
     } else if (type === 'dias') {
       rows.push(['Colaborador', 'Cidade', 'Estado', 'Lojas', 'Início', 'Fim', 'Dias', 'Motivo'])
@@ -397,6 +422,62 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                       <td style={tdSt}><span style={{ fontWeight: '600' }}>{s.name}</span></td>
                       <td style={{ ...tdSt, textAlign: 'center' }}>{s.inventories > 0 ? <span style={{ background: '#dbeafe', color: '#1d4ed8', borderRadius: '20px', padding: '2px 10px', fontWeight: '700', fontSize: '12px' }}>{s.inventories} inv.</span> : '—'}</td>
                       <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700' }}>{s.spent > 0 ? curr(s.spent) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Gestão */}
+        {type === 'gestao' && (
+          grouped.length === 0 ? <div style={{ textAlign: 'center', color: '#94a3b8', padding: '48px' }}>Nenhuma loja com campo Gestão preenchido no período. Importe as lojas com a coluna GESTAO preenchida.</div> :
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Totalizador geral */}
+            {(() => {
+              const totalGeral = (grouped as any[]).reduce((s, g) => s + g.spent, 0)
+              const totalInv   = (grouped as any[]).reduce((s, g) => s + g.inventories, 0)
+              return (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#1e293b', borderRadius: '12px', padding: '16px 24px', color: 'white' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Resumo Geral — {grouped.length} gestão(ões)</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>{totalInv} inventário{totalInv !== 1 ? 's' : ''} realizados</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Inventários</div>
+                      <div style={{ fontSize: '18px', fontWeight: '800', color: '#60a5fa', marginTop: '2px' }}>{totalInv}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Total Gasto</div>
+                      <div style={{ fontSize: '22px', fontWeight: '900', color: 'white', marginTop: '2px', letterSpacing: '-0.02em' }}>{curr(totalGeral)}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+            {/* Tabela */}
+            <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>
+                  <th style={thSt}>Gestão</th>
+                  <th style={{ ...thSt, textAlign: 'center' }}>Lojas</th>
+                  <th style={{ ...thSt, textAlign: 'center' }}>Inventários</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Total Gasto</th>
+                </tr></thead>
+                <tbody>
+                  {(grouped as any[]).map((g: any, i: number) => (
+                    <tr key={g.name} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={tdSt}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: BAR_COLORS[i % BAR_COLORS.length], flexShrink: 0 }} />
+                          <span style={{ fontWeight: '700', color: '#0f172a' }}>{g.name}</span>
+                        </div>
+                      </td>
+                      <td style={{ ...tdSt, textAlign: 'center' }}>{g.storeCount ?? 0}</td>
+                      <td style={{ ...tdSt, textAlign: 'center' }}>{g.inventories > 0 ? <span style={{ background: '#dbeafe', color: '#1d4ed8', borderRadius: '20px', padding: '2px 10px', fontWeight: '700', fontSize: '12px' }}>{g.inventories} inv.</span> : '—'}</td>
+                      <td style={{ ...tdSt, textAlign: 'right', fontWeight: '800', color: '#1d4ed8' }}>{g.spent > 0 ? curr(g.spent) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -659,7 +740,7 @@ function tripInAnyPeriod(trip: any, periods: string[]): boolean {
   })
 }
 
-type DetailCard = 'colaborador' | 'centrocusto' | 'pagamento' | 'loja' | 'dias' | 'pessoal'
+type DetailCard = 'colaborador' | 'centrocusto' | 'pagamento' | 'loja' | 'dias' | 'pessoal' | 'gestao'
 
 export default function AuditDashboardPage() {
   const [selectedPeriods, setSelectedPeriods] = useState<string[]>([])
@@ -689,6 +770,7 @@ export default function AuditDashboardPage() {
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: expenses } = trpc.auditCost.listExpenses.useQuery({ pageSize: 500 })
   const { data: salariesData } = trpc.auditCollaboratorSalaries.list.useQuery({ pageSize: 500 })
+  const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 1000 })
 
   const collabOptions = useMemo(
     () => ((collabs as any[]) ?? []).map((c: any) => ({ value: c.id, label: c.name })),
@@ -900,6 +982,37 @@ export default function AuditDashboardPage() {
       .slice(0, 10)
   }, [monthExpenses, tripsInPeriod])
 
+  // Mapa storeName → gestao (para o card de custo por gestão)
+  const storeGestaoMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const s of storesData?.stores ?? []) {
+      if (s.tradeName && s.gestao) map.set(s.tradeName, s.gestao)
+      if (s.name && s.gestao) map.set(s.name, s.gestao)
+    }
+    return map
+  }, [storesData])
+
+  const byGestao = useMemo(() => {
+    const map = new Map<string, { total: number; inventories: number; stores: Set<string> }>()
+    for (const e of monthExpenses) {
+      if (!e.storeName) continue
+      const gestao = storeGestaoMap.get(e.storeName) ?? storeGestaoMap.get(e.storeName?.split('Boticário ').join('').trim()) ?? 'Não informado'
+      const prev = map.get(gestao) ?? { total: 0, inventories: 0, stores: new Set() }
+      map.set(gestao, { total: prev.total + Number(e.value), inventories: prev.inventories, stores: new Set([...prev.stores, e.storeName]) })
+    }
+    for (const t of tripsInPeriod) {
+      if (!t.stores) continue
+      for (const sn of t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)) {
+        const gestao = storeGestaoMap.get(sn) ?? 'Não informado'
+        const prev = map.get(gestao) ?? { total: 0, inventories: 0, stores: new Set() }
+        map.set(gestao, { ...prev, inventories: prev.inventories + 1 })
+      }
+    }
+    return Array.from(map.entries())
+      .map(([label, d]) => ({ label, total: d.total, inventories: d.inventories, storeCount: d.stores.size }))
+      .sort((a, b) => b.total - a.total)
+  }, [monthExpenses, tripsInPeriod, storeGestaoMap])
+
   // ── Custo por mês (somente períodos selecionados no filtro) ──────────────────
   const byMonth = useMemo(() => {
     if (!availablePeriods?.length) return []
@@ -949,6 +1062,7 @@ export default function AuditDashboardPage() {
   const maxCcVal = Math.max(...byCostCenter.map(c => c.value), 1)
   const maxPayVal = Math.max(...byPayment.map(c => c.value), 1)
   const maxStoreVal = Math.max(...byStore.map(c => c.spent), 1)
+  const maxGestaoVal = Math.max(...byGestao.map(c => c.total), 1)
 
   return (
     <ModulePage
@@ -1178,6 +1292,7 @@ export default function AuditDashboardPage() {
           collabs={collabs as any[]}
           selectedPeriods={selectedPeriods}
           effectiveCollabs={effectiveCollabs}
+          storeGestaoMap={storeGestaoMap}
         />
       )}
 
@@ -1291,6 +1406,19 @@ export default function AuditDashboardPage() {
                   </>
                 )
               })()
+            }
+          </DataCard>
+        </ClickableCard>
+
+        <ClickableCard onClick={() => setDetailCard('gestao')}>
+          <DataCard title="Custo por Gestão">
+            {!byGestao.length
+              ? <EmptyState icon="🏢" title="Sem dados" description="Cadastre lojas com o campo Gestão preenchido." />
+              : byGestao.map((g, i) => (
+                  <Bar key={g.label} label={g.label} value={g.total} max={maxGestaoVal}
+                    color={BAR_COLORS[(i + 3) % BAR_COLORS.length]}
+                    badge={g.inventories > 0 ? `${g.inventories} inv.` : undefined} />
+                ))
             }
           </DataCard>
         </ClickableCard>

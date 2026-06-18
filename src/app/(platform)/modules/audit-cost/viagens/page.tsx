@@ -135,7 +135,7 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
         {!selectedIds.length && <span style={{ color: '#94a3b8', fontSize: '14px' }}>Selecione as lojas da viagem...</span>}
         {selectedStores.map((s: any) => (
           <span key={s.id} style={{ background: '#dbeafe', color: '#1e40af', fontSize: '12px', fontWeight: '600', padding: '3px 10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {s.code ? `[${s.code}] ` : ''}{s.name}
+            {s.code ? `[${s.code}] ` : ''}{s.tradeName || s.name}
             <button onClick={e => { e.stopPropagation(); toggle(s.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', lineHeight: 1, padding: 0, fontSize: '14px' }}>×</button>
           </span>
         ))}
@@ -158,8 +158,8 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
                     {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
                   </div>
                   <div>
-                    <span style={{ fontWeight: '500', color: '#0f172a' }}>{s.name}</span>
-                    {s.code && <span style={{ color: '#64748b', marginLeft: '6px', fontSize: '12px' }}>[{s.code}]</span>}
+                    {s.code && <span style={{ fontWeight: '700', color: '#2563eb', marginRight: '6px', fontSize: '12px', fontFamily: 'monospace' }}>[{s.code}]</span>}
+                    <span style={{ fontWeight: '600', color: '#0f172a' }}>{s.tradeName || s.name}</span>
                     {s.city && <span style={{ color: '#94a3b8', marginLeft: '6px', fontSize: '12px' }}>{s.city}/{s.state}</span>}
                   </div>
                 </div>

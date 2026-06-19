@@ -783,6 +783,7 @@ export default function AuditDashboardPage() {
   )
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: expenses } = trpc.auditCost.listExpenses.useQuery({ pageSize: 500 })
+  const { data: informativeCostsData } = trpc.auditInformativeCosts.list.useQuery({ pageSize: 500 })
   const { data: salariesData } = trpc.auditCollaboratorSalaries.list.useQuery({ pageSize: 500 })
   const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 1000 })
 
@@ -813,18 +814,24 @@ export default function AuditDashboardPage() {
     return selectedCollabs.filter(id => tipoTimeCollabIds.has(id))
   }, [selectedCollabs, tipoTimeCollabIds])
 
-  // ── Viagens do período (com filtro de colaborador) ───────────────────────────
+  // ── Viagens do período (somente CONCLUÍDAS — status CLOSED) ─────────────────
   const tripsAll = tripsData?.trips ?? []
+  const closedTripIds = useMemo(
+    () => new Set(tripsAll.filter((t: any) => t.status === 'CLOSED').map((t: any) => t.id)),
+    [tripsAll]
+  )
   const tripsInPeriod = useMemo(() => {
-    const byPeriod = tripsAll.filter((t: any) => tripInAnyPeriod(t, selectedPeriods))
+    const byPeriod = tripsAll.filter((t: any) => t.status === 'CLOSED' && tripInAnyPeriod(t, selectedPeriods))
     if (effectiveCollabs.length === 0) return byPeriod
     return byPeriod.filter((t: any) => effectiveCollabs.includes(t.collaboratorId))
   }, [tripsAll, selectedPeriods, effectiveCollabs])
 
-  // ── Despesas do período (com filtro de colaborador) ──────────────────────────
+  // ── Despesas reais confirmadas: somente subtype 'gasto' de viagens CLOSED ────
   const monthExpenses = useMemo(() => {
     if (!expenses?.expenses || selectedPeriods.length === 0) return []
     return expenses.expenses.filter((e: any) => {
+      if (e.subtype !== 'gasto') return false
+      if (e.tripId && !closedTripIds.has(e.tripId)) return false
       const { year: ey, month: em } = isoYMD(e.date)
       const inPeriod = selectedPeriods.some(pk => {
         const [y, m] = pk.split('-').map(Number)
@@ -835,12 +842,29 @@ export default function AuditDashboardPage() {
         effectiveCollabs.includes(e.auditorId)
       return inPeriod && inCollab
     })
-  }, [expenses, selectedPeriods, effectiveCollabs])
+  }, [expenses, selectedPeriods, effectiveCollabs, closedTripIds])
+
+  // ── Custos informativos do período ──────────────────────────────────────────
+  const monthInformativeCosts = useMemo(() => {
+    const items: any[] = informativeCostsData?.items ?? []
+    if (selectedPeriods.length === 0) return []
+    return items.filter((ic: any) => {
+      const { year: ey, month: em } = isoYMD(ic.date)
+      const inPeriod = selectedPeriods.some(pk => {
+        const [y, m] = pk.split('-').map(Number)
+        return ey === y && em === m
+      })
+      const inCollab = effectiveCollabs.length === 0 ||
+        effectiveCollabs.includes(ic.collaboratorId)
+      return inPeriod && inCollab
+    })
+  }, [informativeCostsData, selectedPeriods, effectiveCollabs])
 
   // ── KPIs ─────────────────────────────────────────────────────────────────────
   const totalMonthExpenses = useMemo(
-    () => monthExpenses.reduce((s: number, e: any) => s + Number(e.value), 0),
-    [monthExpenses]
+    () => monthExpenses.reduce((s: number, e: any) => s + Number(e.value), 0)
+        + monthInformativeCosts.reduce((s: number, ic: any) => s + Number(ic.value ?? 0), 0),
+    [monthExpenses, monthInformativeCosts]
   )
 
   const totalDaysInTravel = useMemo(() => {
@@ -1033,6 +1057,7 @@ export default function AuditDashboardPage() {
   const byMonth = useMemo(() => {
     if (!availablePeriods?.length) return []
     const allExp: any[] = expenses?.expenses ?? []
+    const allInformative: any[] = informativeCostsData?.items ?? []
     const activePeriods = selectedPeriods.length > 0
       ? availablePeriods.filter(p => selectedPeriods.includes(`${p.year}-${p.month}`))
       : availablePeriods
@@ -1043,13 +1068,19 @@ export default function AuditDashboardPage() {
         const periodStart = new Date(p.year, p.month - 1, 1)
         const periodEnd   = new Date(p.year, p.month, 0, 23, 59, 59)
 
-        // despesas de viagem do mês
+        // apenas gastos reais (subtype=gasto) de viagens CLOSED + custos informativos
         const expTotal = allExp
           .filter(e => {
             const { year: ey, month: em } = isoYMD(e.date)
-            return ey === p.year && em === p.month
+            return ey === p.year && em === p.month && e.subtype === 'gasto' && e.tripId && closedTripIds.has(e.tripId)
           })
           .reduce((s, e) => s + Number(e.value), 0)
+          + allInformative
+          .filter(ic => {
+            const { year: ey, month: em } = isoYMD(ic.date)
+            return ey === p.year && em === p.month
+          })
+          .reduce((s, ic) => s + Number(ic.value ?? 0), 0)
 
         // custo de pessoal do mês (1 registro mais recente por colaborador)
         const seen = new Set<string>()
@@ -1070,7 +1101,7 @@ export default function AuditDashboardPage() {
 
         return { label: p.label, expTotal, salTotal, total: expTotal + salTotal }
       })
-  }, [availablePeriods, selectedPeriods, expenses, allSalaries])
+  }, [availablePeriods, selectedPeriods, expenses, informativeCostsData, allSalaries, closedTripIds])
 
   const maxMonthVal = Math.max(...byMonth.map(m => m.total), 1)
 

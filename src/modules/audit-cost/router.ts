@@ -17,6 +17,7 @@ export const auditCostRouter = createTRPCRouter({
       const { skip, take } = paginate(input.page, input.pageSize)
       const where: any = {
         deletedAt: null,
+        trip: { deletedAt: null },
         ...(input.auditorId && { auditorId: input.auditorId }),
         ...(input.type && { type: input.type }),
         ...(input.startDate && { date: { gte: input.startDate } }),

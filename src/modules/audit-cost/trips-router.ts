@@ -191,7 +191,9 @@ export const auditTripsRouter = createTRPCRouter({
   delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.db.auditTrip.update({ where: { id: input.id }, data: { deletedAt: new Date() } })
+      const now = new Date()
+      await ctx.db.auditExpense.updateMany({ where: { tripId: input.id, deletedAt: null }, data: { deletedAt: now } })
+      return ctx.db.auditTrip.update({ where: { id: input.id }, data: { deletedAt: now } })
     }),
 
   updateSettlement: protectedProcedure

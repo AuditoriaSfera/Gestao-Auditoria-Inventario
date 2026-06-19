@@ -1003,8 +1003,12 @@ export default function AuditDashboardPage() {
     const map = new Map<string, { spent: number; inventories: number }>()
     for (const e of monthExpenses) {
       if (!e.storeName) continue
-      const prev = map.get(e.storeName) ?? { spent: 0, inventories: 0 }
-      map.set(e.storeName, { ...prev, spent: prev.spent + Number(e.value) })
+      const stores = e.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
+      const share = Number(e.value) / stores.length
+      for (const sn of stores) {
+        const prev = map.get(sn) ?? { spent: 0, inventories: 0 }
+        map.set(sn, { ...prev, spent: prev.spent + share })
+      }
     }
     for (const t of tripsInPeriod) {
       if (!t.stores) continue
@@ -1035,9 +1039,12 @@ export default function AuditDashboardPage() {
     for (const e of monthExpenses) {
       if (!e.storeName) continue
       const parts = e.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
-      const gestao = parts.map((sn: string) => storeGestaoMap.get(sn)).find(Boolean) ?? 'Não informado'
-      const prev = map.get(gestao) ?? { total: 0, inventories: 0, stores: new Set() }
-      map.set(gestao, { total: prev.total + Number(e.value), inventories: prev.inventories, stores: new Set([...prev.stores, ...parts]) })
+      const share = Number(e.value) / parts.length
+      for (const sn of parts) {
+        const gestao = storeGestaoMap.get(sn) ?? 'Não informado'
+        const prev = map.get(gestao) ?? { total: 0, inventories: 0, stores: new Set() }
+        map.set(gestao, { total: prev.total + share, inventories: prev.inventories, stores: new Set([...prev.stores, sn]) })
+      }
     }
     for (const t of tripsInPeriod) {
       if (!t.stores) continue

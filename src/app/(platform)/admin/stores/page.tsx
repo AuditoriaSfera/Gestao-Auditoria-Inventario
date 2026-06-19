@@ -312,6 +312,8 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 export default function StoresPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
+  const [filterGestao, setFilterGestao] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [editStore, setEditStore] = useState<any | null>(null)
@@ -320,7 +322,12 @@ export default function StoresPage() {
   const [error, setError] = useState('')
 
   const utils = trpc.useUtils()
-  const { data, isLoading } = trpc.stores.list.useQuery({ page, pageSize: 20, search: search || undefined })
+  const { data, isLoading } = trpc.stores.list.useQuery({
+    page, pageSize: 20,
+    search: search || undefined,
+    gestao: filterGestao || undefined,
+    status: filterStatus || undefined,
+  })
 
   const createMut = trpc.stores.create.useMutation({
     onSuccess: () => { utils.stores.list.invalidate(); setShowCreate(false); setForm(emptyForm()); setError('') },
@@ -411,13 +418,49 @@ export default function StoresPage() {
         </Modal>
       )}
 
-      <DataCard
-        title={`Lojas (${data?.meta?.total ?? 0})`}
-        action={
-          <input placeholder="Buscar por código ou nome..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
-            style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', width: '220px' }} />
-        }
-      >
+      <div style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '12px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 220px', minWidth: '180px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Buscar</label>
+          <input
+            placeholder="Código, nome, fantasia, cidade, gerente..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '0 1 160px', minWidth: '140px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Gestão</label>
+          <input
+            placeholder="Filtrar por gestão..."
+            value={filterGestao}
+            onChange={e => { setFilterGestao(e.target.value); setPage(1) }}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '0 1 130px', minWidth: '110px' }}>
+          <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label>
+          <select
+            value={filterStatus}
+            onChange={e => { setFilterStatus(e.target.value); setPage(1) }}
+            style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', background: 'white' }}
+          >
+            <option value="">Todos</option>
+            <option value="ACTIVE">Ativa</option>
+            <option value="INACTIVE">Inativa</option>
+            <option value="CLOSED">Fechada</option>
+          </select>
+        </div>
+        {(search || filterGestao || filterStatus) && (
+          <button
+            onClick={() => { setSearch(''); setFilterGestao(''); setFilterStatus(''); setPage(1) }}
+            style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}
+          >
+            ✕ Limpar
+          </button>
+        )}
+      </div>
+
+      <DataCard title={`Lojas (${data?.meta?.total ?? 0})`}>
         {isLoading ? <LoadingState /> : !data?.stores.length ? (
           <EmptyState icon="🏪" title="Nenhuma loja cadastrada" description="Cadastre a primeira loja da rede ou importe uma planilha." />
         ) : (

@@ -32,8 +32,9 @@ export function formatPercent(value: number | null | undefined): string {
 
 export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return '—'
-  const d = typeof date === 'string' ? new Date(date) : date
-  return new Intl.DateTimeFormat('pt-BR').format(d)
+  const iso = date instanceof Date ? date.toISOString() : String(date)
+  const [year, month, day] = iso.slice(0, 10).split('-')
+  return `${day}/${month}/${year}`
 }
 
 export function formatDateTime(date: Date | string | null | undefined): string {

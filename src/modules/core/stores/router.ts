@@ -9,8 +9,9 @@ export const storesRouter = createTRPCRouter({
         page: z.number().default(1),
         pageSize: z.number().default(20),
         search: z.string().optional(),
-        regionId: z.string().optional(),
+        gestao: z.string().optional(),
         status: z.string().optional(),
+        regionId: z.string().optional(),
         groupId: z.string().optional(),
       })
     )
@@ -27,13 +28,18 @@ export const storesRouter = createTRPCRouter({
         deletedAt: null,
         ...(input.search && {
           OR: [
-            { name: { contains: input.search } },
-            { code: { contains: input.search } },
-            { tradeName: { contains: input.search } },
+            { name: { contains: input.search, mode: 'insensitive' } },
+            { code: { contains: input.search, mode: 'insensitive' } },
+            { tradeName: { contains: input.search, mode: 'insensitive' } },
+            { city: { contains: input.search, mode: 'insensitive' } },
+            { state: { contains: input.search, mode: 'insensitive' } },
+            { gestao: { contains: input.search, mode: 'insensitive' } },
+            { managerName: { contains: input.search, mode: 'insensitive' } },
           ],
         }),
-        ...(input.regionId && { regionId: input.regionId }),
+        ...(input.gestao && { gestao: { contains: input.gestao, mode: 'insensitive' } }),
         ...(input.status && { status: input.status }),
+        ...(input.regionId && { regionId: input.regionId }),
         ...(!hasAllStores && { id: { in: scopedStoreIds } }),
       }
 

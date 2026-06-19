@@ -2,11 +2,12 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { MODULE_LABELS } from '@/lib/constants'
+import { trpc } from '@/lib/trpc'
 
 function getPageTitle(pathname: string): string {
   if (pathname === '/dashboard') return 'Dashboard'
@@ -26,7 +27,15 @@ function getPageTitle(pathname: string): string {
 export default function PlatformLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const title = getPageTitle(pathname)
+  const { data: me } = trpc.auth.me.useQuery()
+
+  useEffect(() => {
+    if (me?.mustChangePassword && pathname !== '/change-password') {
+      router.replace('/change-password')
+    }
+  }, [me?.mustChangePassword, pathname, router])
 
   return (
     <div className="flex h-screen overflow-hidden">

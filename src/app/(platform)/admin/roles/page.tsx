@@ -7,21 +7,22 @@ import { trpc } from '@/lib/trpc'
 import { ModulePage, EmptyState, LoadingState } from '@/components/shared/module-page'
 
 // ── Mapa completo de módulos e permissões disponíveis ────────────────────────
+// Labels alinhados com MODULE_LABELS em src/lib/constants.ts e com o sidebar
 const MODULE_DEFS = [
   {
-    key: 'audit-cost', label: 'Auditoria de Custos', icon: '✈️',
+    key: 'audit-cost', label: 'Custo de Auditoria', icon: '✈️',
     actions: [
       { action: 'view',      label: 'Visualizar módulo' },
-      { action: 'dashboard', label: 'Dashboard' },
+      { action: 'dashboard', label: 'Dashboard de Custos' },
       { action: 'viagens',   label: 'Gerenciar Viagens' },
-      { action: 'salarios',  label: 'Gerenciar Salários' },
-      { action: 'export',    label: 'Exportar relatórios' },
+      { action: 'salarios',  label: 'Gerenciar Salários e Encargos' },
+      { action: 'export',    label: 'Exportar Relatórios' },
     ],
   },
   {
-    key: 'audit-round', label: 'Auditoria de Ronda', icon: '🔍',
+    key: 'audit-round', label: 'Ronda de Auditoria', icon: '🔍',
     actions: [
-      { action: 'view', label: 'Visualizar módulo' },
+      { action: 'view', label: 'Visualizar Ronda' },
     ],
   },
   {
@@ -34,7 +35,7 @@ const MODULE_DEFS = [
     ],
   },
   {
-    key: 'inventory-kpi', label: 'KPI de Inventário', icon: '📊',
+    key: 'inventory-kpi', label: 'KPI do Time de Inventário', icon: '📊',
     actions: [
       { action: 'view', label: 'Visualizar KPIs' },
     ],
@@ -46,7 +47,7 @@ const MODULE_DEFS = [
     ],
   },
   {
-    key: 'note-transit', label: 'Notas em Trânsito', icon: '🧾',
+    key: 'note-transit', label: 'Trânsito de Notas', icon: '🧾',
     actions: [
       { action: 'view',   label: 'Visualizar notas' },
       { action: 'import', label: 'Importar notas' },
@@ -59,27 +60,34 @@ const MODULE_DEFS = [
     ],
   },
   {
-    key: 'cde', label: 'CDE', icon: '📋',
+    key: 'cde', label: 'CDE / Controle de Estoque', icon: '📋',
     actions: [
       { action: 'view', label: 'Visualizar CDE' },
     ],
   },
   {
-    key: 'write-offs', label: 'Quebras', icon: '📉',
+    key: 'write-offs', label: 'Baixas e Perdas', icon: '📉',
     actions: [
-      { action: 'view', label: 'Visualizar quebras' },
+      { action: 'view', label: 'Visualizar baixas' },
     ],
   },
   {
-    key: 'strategic', label: 'Estratégico', icon: '🎯',
+    key: 'strategic', label: 'Indicadores Estratégicos', icon: '🎯',
     actions: [
-      { action: 'view', label: 'Visualizar estratégico' },
+      { action: 'view', label: 'Visualizar indicadores' },
     ],
   },
   {
     key: 'assets', label: 'Patrimônio', icon: '🏛️',
     actions: [
       { action: 'view', label: 'Visualizar patrimônio' },
+    ],
+  },
+  {
+    key: 'platform', label: 'Plataforma Geral', icon: '🖥️',
+    actions: [
+      { action: 'dashboard', label: 'Dashboard Geral' },
+      { action: 'pending',   label: 'Central de Pendências' },
     ],
   },
   {
@@ -103,18 +111,20 @@ const MODULE_DEFS = [
 // Defaults sensatos por role
 const ROLE_DEFAULTS: Record<string, string[]> = {
   'audit-corporate': [
+    'platform:dashboard', 'platform:pending',
     'audit-cost:view', 'audit-cost:dashboard', 'audit-cost:viagens', 'audit-cost:salarios', 'audit-cost:export',
     'audit-round:view',
     'inventory:view', 'inventory:export',
     'inventory-kpi:view',
   ],
   'board': [
+    'platform:dashboard', 'platform:pending',
     'audit-cost:view', 'audit-cost:dashboard',
     'inventory:view', 'inventory-kpi:view', 'inventory-cost:view',
     'strategic:view',
   ],
   'financial': [
-    'audit-cost:view', 'audit-cost:dashboard', 'audit-cost:viagens', 'audit-cost:salarios', 'audit-cost:export',
+    'audit-cost:view', 'audit-cost:viagens', 'audit-cost:export',
     'inventory-cost:view',
     'note-transit:view', 'note-transit:import',
   ],
@@ -124,7 +134,11 @@ const ROLE_DEFAULTS: Record<string, string[]> = {
     'merchandise:view',
   ],
   'inventory': [
+    'platform:dashboard', 'platform:pending',
+    'audit-cost:view', 'audit-cost:dashboard', 'audit-cost:viagens', 'audit-cost:salarios', 'audit-cost:export',
+    'audit-round:view',
     'inventory:view', 'inventory:create', 'inventory:edit', 'inventory:export',
+    'inventory-kpi:view',
     'merchandise:view',
     'cde:view',
     'write-offs:view',

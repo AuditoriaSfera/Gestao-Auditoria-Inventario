@@ -100,6 +100,22 @@ export const auditCostRouter = createTRPCRouter({
       return ctx.db.auditExpense.update({ where: { id: input.id }, data: { value: input.value } })
     }),
 
+  updateDayStore: protectedProcedure
+    .input(z.object({
+      tripId: z.string(),
+      date: z.string(), // YYYY-MM-DD
+      storeName: z.string(),
+      cityUf: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const dayStart = new Date(input.date + 'T00:00:00')
+      const dayEnd   = new Date(input.date + 'T23:59:59')
+      return ctx.db.auditExpense.updateMany({
+        where: { tripId: input.tripId, deletedAt: null, date: { gte: dayStart, lte: dayEnd } },
+        data: { storeName: input.storeName, ...(input.cityUf ? { cityUf: input.cityUf } : {}) },
+      })
+    }),
+
   listAvailableMonths: protectedProcedure
     .query(async ({ ctx }) => {
       const expenses = await ctx.db.auditExpense.findMany({

@@ -32,7 +32,7 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       }
       const [items, total] = await Promise.all([
         ctx.db.auditInformativeCost.findMany({
-          where, skip, take, orderBy: { date: 'desc' },
+          where, skip, take, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }],
           include: {
             collaborator: { select: { id: true, name: true, role: true } },
             trip: { select: { id: true, reason: true, stores: true, startDate: true, endDate: true } },
@@ -67,6 +67,35 @@ export const auditInformativeCostsRouter = createTRPCRouter({
           attachmentUrls:  attachmentUrls?.length ? JSON.stringify(attachmentUrls) : null,
           auditorId:  ctx.session.user.id,
           createdBy:  ctx.session.user.id,
+        },
+      })
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id:              z.string(),
+      costCenterName:  z.string().min(1).optional(),
+      date:            z.date().optional(),
+      storeName:       z.string().optional().nullable(),
+      reason:          z.string().optional().nullable(),
+      collaboratorId:  z.string().optional().nullable(),
+      collaboratorIds: z.array(z.string()).optional(),
+      value:           z.number().min(0).optional(),
+      paymentMethod:   z.string().optional().nullable(),
+      attachmentUrls:  z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { id, attachmentUrls, collaboratorIds, collaboratorId, ...rest } = input
+      const primaryCollabId = collaboratorId !== undefined
+        ? (collaboratorId || (collaboratorIds?.[0] ?? null))
+        : undefined
+      return ctx.db.auditInformativeCost.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(primaryCollabId !== undefined && { collaboratorId: primaryCollabId }),
+          ...(collaboratorIds !== undefined && { collaboratorIds: collaboratorIds.length ? JSON.stringify(collaboratorIds) : null }),
+          ...(attachmentUrls  !== undefined && { attachmentUrls:  attachmentUrls.length  ? JSON.stringify(attachmentUrls)  : null }),
         },
       })
     }),

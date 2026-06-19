@@ -2,28 +2,20 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
 import { useAuthStore } from '@/lib/stores/auth'
-import { Eye, EyeOff, Loader2, ShieldCheck, BarChart3, Package, ClipboardList } from 'lucide-react'
-
-const schema = z.object({
-  email: z.string().email('E-mail inválido'),
-  password: z.string().min(1, 'Senha obrigatória'),
-})
-type FormData = z.infer<typeof schema>
+import { Eye, EyeOff, Loader2, ShieldCheck, BarChart3, Package } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
   const { setToken } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-  })
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
 
   const signIn = trpc.auth.signIn.useMutation({
     onSuccess: (data) => {
@@ -36,10 +28,25 @@ export default function LoginPage() {
     },
   })
 
-  const onSubmit = (data: FormData) => {
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setEmailError('')
+    setPasswordError('')
     setErrorMsg('')
-    signIn.mutate(data)
+    let valid = true
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('E-mail inválido')
+      valid = false
+    }
+    if (!password) {
+      setPasswordError('Senha obrigatória')
+      valid = false
+    }
+    if (!valid) return
+    signIn.mutate({ email, password })
   }
+
+  const isSubmitting = signIn.isPending
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%)' }}>
@@ -123,29 +130,31 @@ export default function LoginPage() {
           </div>
 
           {/* Formulário */}
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={onSubmit} autoComplete="new-password">
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
                 E-mail
               </label>
               <input
-                type="email"
+                type="text"
+                inputMode="email"
                 placeholder="seu@email.com.br"
-                autoComplete="email"
-                {...register('email')}
+                autoComplete="new-password"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setEmailError('') }}
                 style={{
                   width: '100%', padding: '12px 16px',
-                  border: errors.email ? '2px solid #ef4444' : '2px solid #e5e7eb',
+                  border: emailError ? '2px solid #ef4444' : '2px solid #e5e7eb',
                   borderRadius: '10px', fontSize: '15px', outline: 'none',
                   background: '#f9fafb', color: '#0f172a',
                   boxSizing: 'border-box',
                   transition: 'border-color 0.2s',
                 }}
                 onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = 'white' }}
-                onBlur={(e) => { e.target.style.borderColor = errors.email ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb' }}
+                onBlur={(e) => { e.target.style.borderColor = emailError ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb' }}
               />
-              {errors.email && (
-                <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{errors.email.message}</p>
+              {emailError && (
+                <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{emailError}</p>
               )}
             </div>
 
@@ -157,18 +166,19 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
-                  autoComplete="current-password"
-                  {...register('password')}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={e => { setPassword(e.target.value); setPasswordError('') }}
                   style={{
                     width: '100%', padding: '12px 48px 12px 16px',
-                    border: errors.password ? '2px solid #ef4444' : '2px solid #e5e7eb',
+                    border: passwordError ? '2px solid #ef4444' : '2px solid #e5e7eb',
                     borderRadius: '10px', fontSize: '15px', outline: 'none',
                     background: '#f9fafb', color: '#0f172a',
                     boxSizing: 'border-box',
                     transition: 'border-color 0.2s',
                   }}
                   onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = 'white' }}
-                  onBlur={(e) => { e.target.style.borderColor = errors.password ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb' }}
+                  onBlur={(e) => { e.target.style.borderColor = passwordError ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb' }}
                 />
                 <button
                   type="button"
@@ -182,8 +192,8 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              {errors.password && (
-                <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{errors.password.message}</p>
+              {passwordError && (
+                <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{passwordError}</p>
               )}
             </div>
 
@@ -199,20 +209,20 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isSubmitting || signIn.isPending}
+              disabled={isSubmitting}
               style={{
                 width: '100%', padding: '14px',
-                background: isSubmitting || signIn.isPending
+                background: isSubmitting
                   ? '#93c5fd'
                   : 'linear-gradient(135deg, #1d4ed8, #3b82f6)',
                 color: 'white', border: 'none', borderRadius: '10px',
-                fontSize: '15px', fontWeight: '600', cursor: isSubmitting || signIn.isPending ? 'not-allowed' : 'pointer',
+                fontSize: '15px', fontWeight: '600', cursor: isSubmitting ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                 transition: 'opacity 0.2s',
                 boxShadow: '0 4px 12px rgba(37,99,235,0.3)',
               }}
             >
-              {(isSubmitting || signIn.isPending) ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
                   Entrando...
@@ -241,9 +251,14 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <p style={{ textAlign: 'center', fontSize: '12px', color: '#94a3b8', marginTop: '20px' }}>
-            Problemas de acesso? Contate o administrador.
-          </p>
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <Link
+              href="/forgot-password"
+              style={{ fontSize: '13px', color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}
+            >
+              Esqueci minha senha
+            </Link>
+          </div>
         </div>
       </div>
 

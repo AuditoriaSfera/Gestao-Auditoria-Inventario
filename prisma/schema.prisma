@@ -68,6 +68,7 @@ model User {
   pendingItems        PendingItem[]       @relation("PendingResponsible")
   pendingInteractions PendingInteraction[]
   importBatches       ImportBatch[]
+  passwordResetTokens PasswordResetToken[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1546,4 +1547,17 @@ model InventoryCostItem {
   cost InventoryCost @relation(fields: [costId], references: [id], onDelete: Cascade)
 
   @@map("inventory_cost_items")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
 }

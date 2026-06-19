@@ -104,6 +104,7 @@ function SalarioModal({
   const [collaboratorIds, setCollaboratorIds] = useState<string[]>(
     initial?.collaboratorId ? [initial.collaboratorId] : []
   )
+  const [extraCollabIds, setExtraCollabIds] = useState<string[]>([])
   const [cargo, setCargo] = useState(initial?.cargo ?? '')
   const [salarioBase, setSalarioBase] = useState(
     initial?.salarioBase != null ? String(Number(initial.salarioBase)) : ''
@@ -146,6 +147,19 @@ function SalarioModal({
           vigenciaFim: vigenciaFim ? new Date(vigenciaFim + 'T12:00:00') : null,
           observacao: observacao || null,
         })
+        if (extraCollabIds.length > 0) {
+          for (const collaboratorId of extraCollabIds) {
+            await createMut.mutateAsync({
+              collaboratorId,
+              cargo: cargo || undefined,
+              tipoTime,
+              salarioBase: salNum,
+              encargos: encNum,
+              vigenciaInicio: new Date(vigenciaInicio + 'T12:00:00'),
+              observacao: observacao || undefined,
+            })
+          }
+        }
       } else {
         const hoje = new Date()
         const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1, 12, 0, 0)
@@ -190,7 +204,7 @@ function SalarioModal({
 
         <div style={{ display: 'grid', gap: '14px' }}>
           {/* Colaborador(es) */}
-          {!isEdit && (
+          {!isEdit ? (
             <div>
               <label style={labelStyle}>Colaboradores *</label>
               <MultiSelectDropdown
@@ -200,6 +214,29 @@ function SalarioModal({
                 placeholder="Selecione um ou mais colaboradores"
               />
             </div>
+          ) : (
+            <>
+              <div>
+                <label style={labelStyle}>Colaborador atual</label>
+                <div style={{ padding: '9px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '14px', background: '#f8fafc', color: '#374151', fontWeight: '600' }}>
+                  {collaborators.find((c: any) => c.id === initial?.collaboratorId)?.name ?? '—'}
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Adicionar mais colaboradores com os mesmos valores</label>
+                <MultiSelectDropdown
+                  options={collabOptions.filter(o => o.value !== initial?.collaboratorId)}
+                  selected={extraCollabIds}
+                  onChange={setExtraCollabIds}
+                  placeholder="Selecione colaboradores adicionais..."
+                />
+                {extraCollabIds.length > 0 && (
+                  <div style={{ marginTop: '6px', fontSize: '12px', color: '#2563eb' }}>
+                    {extraCollabIds.length} colaborador(es) serão adicionados com os mesmos valores ao salvar.
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {/* Cargo */}

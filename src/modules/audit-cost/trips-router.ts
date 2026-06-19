@@ -56,17 +56,21 @@ export const auditTripsRouter = createTRPCRouter({
           where, skip, take, orderBy: { createdAt: 'desc' },
           include: {
             collaborator: { select: { id: true, name: true, role: true } },
-            expenses: { where: { deletedAt: null }, select: { value: true } },
+            expenses: { where: { deletedAt: null }, select: { value: true, subtype: true } },
           },
         }),
         ctx.db.auditTrip.count({ where }),
       ])
-      // calcular total gasto e saldo em runtime
-      const enriched = trips.map((t: any) => ({
-        ...t,
-        spentAmount: t.expenses.reduce((s: number, e: any) => s + Number(e.value), 0),
-        balance: t.releasedAmount - t.expenses.reduce((s: number, e: any) => s + Number(e.value), 0),
-      }))
+      // separar adiantado (solicitações) de gasto real (gastos) em runtime
+      const enriched = trips.map((t: any) => {
+        const advancedAmount = t.expenses
+          .filter((e: any) => e.subtype !== 'gasto')
+          .reduce((s: number, e: any) => s + Number(e.value), 0) || Number(t.advancedAmount ?? 0)
+        const spentAmount = t.expenses
+          .filter((e: any) => e.subtype === 'gasto')
+          .reduce((s: number, e: any) => s + Number(e.value), 0)
+        return { ...t, advancedAmount, spentAmount, balance: advancedAmount - spentAmount }
+      })
       return { trips: enriched, meta: buildPaginationMeta(total, input.page, input.pageSize) }
     }),
 
@@ -81,8 +85,13 @@ export const auditTripsRouter = createTRPCRouter({
           formLinks: { where: { deletedAt: null }, include: { response: true } },
         },
       })
-      const spentAmount = trip.expenses.reduce((s: number, e: any) => s + Number(e.value), 0)
-      return { ...trip, spentAmount, balance: trip.releasedAmount - spentAmount }
+      const advancedAmount = trip.expenses
+        .filter((e: any) => e.subtype !== 'gasto')
+        .reduce((s: number, e: any) => s + Number(e.value), 0) || Number(trip.advancedAmount ?? 0)
+      const spentAmount = trip.expenses
+        .filter((e: any) => e.subtype === 'gasto')
+        .reduce((s: number, e: any) => s + Number(e.value), 0)
+      return { ...trip, advancedAmount, spentAmount, balance: advancedAmount - spentAmount }
     }),
 
   create: protectedProcedure

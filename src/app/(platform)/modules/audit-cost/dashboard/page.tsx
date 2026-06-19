@@ -11,6 +11,19 @@ import { formatCurrency } from '@/lib/utils'
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 const BAR_COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16']
 
+function costCenterIcon(name: string): string {
+  const n = (name ?? '').toLowerCase()
+  if (n.includes('aliment') || n.includes('jantar') || n.includes('almoço') || n.includes('refeição') || n.includes('lanche')) return '🍽️'
+  if (n.includes('hosped') || n.includes('hotel')) return '🏨'
+  if (n.includes('combust') || n.includes('gasolina') || n.includes('etanol')) return '⛽'
+  if (n.includes('pedágio') || n.includes('pedagio')) return '🛣️'
+  if (n.includes('estacion')) return '🅿️'
+  if (n.includes('passagem') || n.includes('aérea') || n.includes('aereo') || n.includes('voo')) return '✈️'
+  if (n.includes('aluguel') || n.includes('aplicativo') || n.includes('uber') || n.includes('taxi') || n.includes('táxi') || n.includes('carro')) return '🚗'
+  if (n.includes('outros') || n.includes('diverso')) return '📦'
+  return '💳'
+}
+
 // Extrai { year, month, day } sem conversão de timezone local.
 // superjson desserializa campos Date do Prisma como objetos Date, então usamos
 // .toISOString() para obter sempre a representação UTC.
@@ -162,9 +175,10 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
       const map = new Map<string, { name: string; spent: number; inventories: number; stores: Set<string>; rows: any[] }>()
       for (const e of filtered) {
         if (!e.storeName) continue
-        const gestao = storeGestaoMap.get(e.storeName) ?? 'Não informado'
+        const parts = e.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
+        const gestao = parts.map((sn: string) => storeGestaoMap.get(sn)).find(Boolean) ?? 'Não informado'
         const prev = map.get(gestao) ?? { name: gestao, spent: 0, inventories: 0, stores: new Set(), rows: [] }
-        map.set(gestao, { ...prev, spent: prev.spent + Number(e.value), stores: new Set([...prev.stores, e.storeName]), rows: [...prev.rows, e] })
+        map.set(gestao, { ...prev, spent: prev.spent + Number(e.value), stores: new Set([...prev.stores, ...parts]), rows: [...prev.rows, e] })
       }
       for (const t of filteredTrips) {
         if (!t.stores) continue
@@ -322,7 +336,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
                       {/* Nome + contagem */}
                       <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{g.name}</div>
+                        <div style={{ fontWeight: '700', fontSize: '15px', color: '#0f172a' }}>{type === 'centrocusto' ? `${costCenterIcon(g.name)} ${g.name}` : g.name}</div>
                         <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{lancCount} lançamento{lancCount !== 1 ? 's' : ''}</div>
                       </div>
                       {/* Totalizadores */}
@@ -357,7 +371,7 @@ function DetailView({ type, onClose, expenses, trips, salaries, collabs, selecte
                           {sortedRows.filter((e: any) => e.paymentMethod !== 'Adiantamento').map((e: any) => (
                             <tr key={e.id}>
                               <td style={tdSt}>{fmt(e.date)}</td>
-                              {type === 'colaborador' && <td style={tdSt}>{e.type ?? '—'}</td>}
+                              {type === 'colaborador' && <td style={tdSt}>{e.type ? `${costCenterIcon(e.type)} ${e.type}` : '—'}</td>}
                               {type === 'centrocusto' && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
                               {type === 'pagamento'   && <td style={tdSt}>{collabName(e.collaboratorId ?? e.auditorId)}</td>}
                               <td style={tdSt}>{e.storeName ?? '—'}</td>
@@ -996,9 +1010,10 @@ export default function AuditDashboardPage() {
     const map = new Map<string, { total: number; inventories: number; stores: Set<string> }>()
     for (const e of monthExpenses) {
       if (!e.storeName) continue
-      const gestao = storeGestaoMap.get(e.storeName) ?? storeGestaoMap.get(e.storeName?.split('Boticário ').join('').trim()) ?? 'Não informado'
+      const parts = e.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
+      const gestao = parts.map((sn: string) => storeGestaoMap.get(sn)).find(Boolean) ?? 'Não informado'
       const prev = map.get(gestao) ?? { total: 0, inventories: 0, stores: new Set() }
-      map.set(gestao, { total: prev.total + Number(e.value), inventories: prev.inventories, stores: new Set([...prev.stores, e.storeName]) })
+      map.set(gestao, { total: prev.total + Number(e.value), inventories: prev.inventories, stores: new Set([...prev.stores, ...parts]) })
     }
     for (const t of tripsInPeriod) {
       if (!t.stores) continue
@@ -1010,6 +1025,7 @@ export default function AuditDashboardPage() {
     }
     return Array.from(map.entries())
       .map(([label, d]) => ({ label, total: d.total, inventories: d.inventories, storeCount: d.stores.size }))
+      .filter(g => g.total > 0)
       .sort((a, b) => b.total - a.total)
   }, [monthExpenses, tripsInPeriod, storeGestaoMap])
 
@@ -1167,7 +1183,7 @@ export default function AuditDashboardPage() {
                   return byMonth[i].label === `${MONTHS[mo - 1]}/${String(yr).slice(2)}`
                 })
                 const val = byMonth[i][key]
-                const label = val >= 1000 ? `R$${(val/1000).toFixed(1)}k` : `R$${val.toFixed(0)}`
+                const label = formatCurrency(val)
                 // posiciona abaixo do ponto para não colidir com o tooltip do total acima
                 const labelY = y + 18
                 const labelX = Math.max(PAD.left + 2, Math.min(x, PAD.left + iW - 2))
@@ -1192,7 +1208,7 @@ export default function AuditDashboardPage() {
         const grandTotal = byMonth.reduce((acc, m) => acc + m.total, 0)
         const totalPts = pts('total')
         const fmtCompact = (v: number) => v >= 1000 ? `R$${(v/1000).toFixed(1)}k` : `R$${v.toFixed(0)}`
-        const BOX_W = 62
+        const BOX_W = 96
         const BOX_H = 32
 
         return (
@@ -1219,7 +1235,7 @@ export default function AuditDashboardPage() {
                 {/* label boxes: % + valor real */}
                 {totalPts.map(([x, y], i) => {
                   const pct = grandTotal > 0 ? Math.round((byMonth[i].total / grandTotal) * 100) : 0
-                  const valStr = fmtCompact(byMonth[i].total)
+                  const valStr = formatCurrency(byMonth[i].total)
                   const bx = Math.max(PAD.left, Math.min(x - BOX_W / 2, PAD.left + iW - BOX_W))
                   const by = Math.max(2, y - BOX_H - 10)
                   return (
@@ -1232,9 +1248,9 @@ export default function AuditDashboardPage() {
                           y: rect.top + by - 8,
                           lines: [
                             `📅 ${byMonth[i].label}`,
-                            `💰 Total do mês: ${valStr.replace('R$', 'R$ ')}`,
+                            `💰 Total do mês: ${valStr}`,
                             `📊 ${pct}% do total do período`,
-                            `(período = ${fmtCompact(grandTotal).replace('R$', 'R$ ')})`,
+                            `(período = ${formatCurrency(grandTotal)})`,
                           ],
                         })
                       }}
@@ -1316,7 +1332,7 @@ export default function AuditDashboardPage() {
             {!byCostCenter.length
               ? <EmptyState icon="📂" title="Sem dados" description="Nenhuma despesa no período." />
               : byCostCenter.map((c, i) => (
-                  <Bar key={c.label} label={c.label} value={c.value} max={maxCcVal} color={BAR_COLORS[i % BAR_COLORS.length]} />
+                  <Bar key={c.label} label={`${costCenterIcon(c.label)} ${c.label}`} value={c.value} max={maxCcVal} color={BAR_COLORS[i % BAR_COLORS.length]} />
                 ))
             }
           </DataCard>

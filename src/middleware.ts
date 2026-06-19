@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose'
 
 const JWT_SECRET = new TextEncoder().encode(process.env.AUTH_SECRET ?? 'fallback-secret')
 
-const PUBLIC_PATHS = ['/login', '/api/trpc/auth.signIn', '/formulario']
+const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password', '/api/trpc/auth.signIn', '/api/trpc/auth.requestPasswordReset', '/api/trpc/auth.resetPassword', '/formulario', '/api/admin/cleanup-trips']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

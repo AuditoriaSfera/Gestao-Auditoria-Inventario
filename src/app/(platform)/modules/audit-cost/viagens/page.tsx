@@ -13,6 +13,19 @@ const PAYMENT_METHODS = ['Adiantamento','Cartão Corporativo','Cartão Combustí
 const DIAS_SEMANA = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
 const DEFAULT_COST_TYPES = ['Alimentação','Hospedagem','Combustível','Pedágio','Estacionamento','Passagem','Aluguel de carro','Carro de aplicativo','Outros']
 
+function costCenterIcon(name: string): string {
+  const n = (name ?? '').toLowerCase()
+  if (n.includes('aliment') || n.includes('jantar') || n.includes('almoço') || n.includes('refeição') || n.includes('lanche')) return '🍽️'
+  if (n.includes('hosped') || n.includes('hotel')) return '🏨'
+  if (n.includes('combust') || n.includes('gasolina') || n.includes('etanol')) return '⛽'
+  if (n.includes('pedágio') || n.includes('pedagio')) return '🛣️'
+  if (n.includes('estacion')) return '🅿️'
+  if (n.includes('passagem') || n.includes('aérea') || n.includes('aereo') || n.includes('voo')) return '✈️'
+  if (n.includes('aluguel') || n.includes('aplicativo') || n.includes('uber') || n.includes('taxi') || n.includes('táxi') || n.includes('carro')) return '🚗'
+  if (n.includes('outros') || n.includes('diverso')) return '📦'
+  return '💳'
+}
+
 const inp = { width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1.5px solid #e2e8f0', fontSize: '15px', boxSizing: 'border-box' as const }
 const inpSm = { padding: '6px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', boxSizing: 'border-box' as const, width: '100%' }
 
@@ -123,12 +136,29 @@ function CameraModal({ onCapture, onClose }: { onCapture: (dataUrl: string) => v
 }
 
 // ─── Multi-select de Lojas ────────────────────────────────────────────────────
-function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
+function StoreMultiSelect({ stores: _stores, selectedIds, onChange }: { stores: any[]; selectedIds: string[]; onChange: (ids: string[]) => void }) {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const filtered = stores.filter((s: any) => !search || s.name.toLowerCase().includes(search.toLowerCase()) || (s.code && s.code.toLowerCase().includes(search.toLowerCase())))
-  const selectedStores = stores.filter(s => selectedIds.includes(s.id))
-  function toggle(id: string) { onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]) }
+  // Busca server-side para filtrar corretamente por name, tradeName, code e city
+  const { data: searchData } = trpc.stores.list.useQuery(
+    { pageSize: 60, search: search || undefined },
+    { keepPreviousData: true }
+  )
+  // Quando sem busca, usa a lista pré-carregada do pai; quando com busca, usa resultado do servidor
+  const stores = search ? (searchData?.stores ?? []) : _stores
+  // Mantém mapa de lojas selecionadas para exibi-las mesmo fora da busca atual
+  const [selectedMap, setSelectedMap] = useState<Record<string, any>>({})
+  useEffect(() => {
+    const all = [..._stores, ...(searchData?.stores ?? [])]
+    const next: Record<string, any> = { ...selectedMap }
+    for (const s of all) { if (selectedIds.includes(s.id)) next[s.id] = s }
+    setSelectedMap(next)
+  }, [selectedIds, _stores, searchData])
+  const selectedStores = selectedIds.map(id => selectedMap[id]).filter(Boolean)
+  function toggle(id: string, store?: any) {
+    if (store) setSelectedMap(m => ({ ...m, [id]: store }))
+    onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id])
+  }
   return (
     <div style={{ position: 'relative' }}>
       <div onClick={() => setOpen(o => !o)} style={{ ...inp, cursor: 'pointer', minHeight: '44px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', padding: '6px 10px' }}>
@@ -136,7 +166,7 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
         {selectedStores.map((s: any) => (
           <span key={s.id} style={{ background: '#dbeafe', color: '#1e40af', fontSize: '12px', fontWeight: '600', padding: '3px 10px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
             {s.code ? `[${s.code}] ` : ''}{s.tradeName || s.name}
-            <button onClick={e => { e.stopPropagation(); toggle(s.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', lineHeight: 1, padding: 0, fontSize: '14px' }}>×</button>
+            <button onClick={e => { e.stopPropagation(); toggle(s.id, s) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e40af', lineHeight: 1, padding: 0, fontSize: '14px' }}>×</button>
           </span>
         ))}
         <span style={{ marginLeft: 'auto', color: '#94a3b8', fontSize: '12px', flexShrink: 0 }}>{open ? '▲' : '▼'}</span>
@@ -147,11 +177,11 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
             <input autoFocus placeholder="Buscar loja..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inp, fontSize: '13px', padding: '7px 10px' }} />
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
-            {filtered.length === 0 && <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Nenhuma loja encontrada</div>}
-            {filtered.map((s: any) => {
+            {stores.length === 0 && <div style={{ padding: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Nenhuma loja encontrada</div>}
+            {stores.map((s: any) => {
               const isSel = selectedIds.includes(s.id)
               return (
-                <div key={s.id} onClick={() => toggle(s.id)} style={{ padding: '9px 14px', cursor: 'pointer', background: isSel ? '#eff6ff' : 'transparent', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}
+                <div key={s.id} onClick={() => toggle(s.id, s)} style={{ padding: '9px 14px', cursor: 'pointer', background: isSel ? '#eff6ff' : 'transparent', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}
                   onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
                   onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
                   <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -169,7 +199,7 @@ function StoreMultiSelect({ stores, selectedIds, onChange }: { stores: any[]; se
           <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '12px', color: '#64748b' }}>{selectedIds.length} loja(s)</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button onClick={() => onChange(stores.map(s => s.id))} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
+              <button onClick={() => { const map: Record<string,any> = {...selectedMap}; stores.forEach((s: any) => { map[s.id] = s }); setSelectedMap(map); onChange(stores.map((s: any) => s.id)) }} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
               {selectedIds.length > 0 && (
                 <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
               )}
@@ -465,7 +495,7 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
   const dates = generateDates(startDate, endDate)
   const selectedStores = storesList.filter(s => selectedStoreIds.includes(s.id))
   const storeOptions: StoreOption[] = selectedStores.map((s: any) => ({
-    name: s.name,
+    name: s.tradeName || s.name,
     label: s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name),
   }))
 
@@ -504,7 +534,7 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
     setError('')
     setSaving(true)
     try {
-      const storeNames = selectedStores.map(s => s.name).join(', ')
+      const storeNames = selectedStores.map(s => s.tradeName || s.name).join(', ')
       const cityDisplay = cidadesInfo || (firstStore?.city ? `${firstStore.city}${firstStore.state ? `/${firstStore.state}` : ''}` : '')
       for (const entry of collabEntries) {
         const totalAllowance = dates.reduce((sum, d) => sum + tipos.reduce((s, t) => s + parseMoney(entry.rows[d]?.values?.[t] ?? ''), 0), 0)
@@ -769,7 +799,7 @@ function AbaTiposCusto() {
 // ─── Tabela de Verificação (Prestação) ───────────────────────────────────────
 type NewLancamento = { value: string }
 
-function TabelaVerificacao({ trip }: { trip: any }) {
+function TabelaVerificacao({ trip, storesList }: { trip: any; storesList: any[] }) {
   const allExpenses: any[] = trip.expenses ?? []
   // Originals = solicitações (advances, locked) — gastos = lançamentos de prestação
   const originalExp = allExpenses.filter((e: any) => e.subtype !== 'gasto')
@@ -808,6 +838,12 @@ function TabelaVerificacao({ trip }: { trip: any }) {
   const deleteExpMut = trpc.auditCost.deleteExpense.useMutation({
     onSuccess: () => utils.auditTrips.getById.invalidate({ id: trip.id }),
   })
+  const updateDayStoreMut = trpc.auditCost.updateDayStore.useMutation({
+    onSuccess: () => utils.auditTrips.getById.invalidate({ id: trip.id }),
+  })
+  const [editingStoreDate, setEditingStoreDate] = useState<string | null>(null)
+  const [storeSearch, setStoreSearch] = useState('')
+  const [selectedStoreNames, setSelectedStoreNames] = useState<string[]>([])
 
   function saveAttachment(expId: string, url: string) {
     setSavingAttach(expId)
@@ -907,19 +943,109 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                 <tr key={`${d}-${i}`} style={{ borderBottom: i === rowCount - 1 ? '2px solid #e2e8f0' : '1px solid #f1f5f9', verticalAlign: 'top' }}>
 
                   {/* ── Data ── */}
-                  {isFirst && (
-                    <td rowSpan={rowCount} style={{ padding: '12px 12px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle', textAlign: 'center' }}>
-                      <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
-                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '3px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
-                    </td>
-                  )}
+                  {isFirst && (() => {
+                    const dayStores = [...new Set(dayOrig.flatMap((e: any) => e.storeName ? e.storeName.split(',').map((s: string) => s.trim()) : []).filter(Boolean))]
+                    const isEditingStore = editingStoreDate === d
+                    const filteredStores = storesList.filter((s: any) =>
+                      !storeSearch || (s.tradeName || s.name || '').toLowerCase().includes(storeSearch.toLowerCase()) || (s.code || '').toLowerCase().includes(storeSearch.toLowerCase())
+                    ).slice(0, 50)
+                    return (
+                      <td rowSpan={rowCount} style={{ padding: '10px 10px', background: '#f8fafc', borderRight: '1px solid #e2e8f0', verticalAlign: 'top', textAlign: 'center', minWidth: '150px' }}>
+                        <div style={{ fontWeight: '700', fontSize: '12px', color: '#0f172a' }}>{data.toLocaleDateString('pt-BR')}</div>
+                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', textTransform: 'capitalize' }}>{DIAS_SEMANA[data.getDay()]}</div>
+
+                        {!isEditingStore ? (
+                          <div style={{ marginTop: '6px' }}>
+                            {dayStores.length > 0 ? (
+                              <div style={{ padding: '4px 6px', background: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe', marginBottom: '4px', textAlign: 'left' }}>
+                                <div style={{ fontSize: '9px', fontWeight: '700', color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>Loja(s)</div>
+                                {dayStores.map((n: string, i: number) => (
+                                  <div key={i} style={{ fontSize: '10px', color: '#1e40af', fontWeight: '600', wordBreak: 'break-word' }}>• {n}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>Sem loja</div>
+                            )}
+                            {trip.status === 'OPEN' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedStoreNames(dayStores)
+                                  setEditingStoreDate(d)
+                                  setStoreSearch('')
+                                }}
+                                style={{ fontSize: '10px', padding: '3px 8px', borderRadius: '5px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', color: '#2563eb', fontWeight: '600' }}
+                              >
+                                ✏️ {dayStores.length > 0 ? 'Editar' : 'Definir'} loja
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: '6px', textAlign: 'left' }}>
+                            <input
+                              autoFocus
+                              placeholder="Buscar loja..."
+                              value={storeSearch}
+                              onChange={e => setStoreSearch(e.target.value)}
+                              style={{ width: '100%', padding: '5px 8px', borderRadius: '6px', border: '1.5px solid #3b82f6', fontSize: '11px', boxSizing: 'border-box', outline: 'none', marginBottom: '4px' }}
+                            />
+                            {selectedStoreNames.length > 0 && (
+                              <div style={{ fontSize: '10px', color: '#1d4ed8', fontWeight: '600', marginBottom: '4px', padding: '3px 6px', background: '#eff6ff', borderRadius: '4px' }}>
+                                {selectedStoreNames.length} selecionada(s)
+                              </div>
+                            )}
+                            <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px', background: 'white', marginBottom: '4px' }}>
+                              {filteredStores.length === 0 && (
+                                <div style={{ padding: '8px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>Nenhuma loja</div>
+                              )}
+                              {filteredStores.map((s: any) => {
+                                const name = s.tradeName || s.name
+                                const label = s.code ? `[${s.code}] ${name}` : name
+                                const checked = selectedStoreNames.includes(name)
+                                return (
+                                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 8px', fontSize: '11px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#0f172a', background: checked ? '#eff6ff' : 'white' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => setSelectedStoreNames(prev =>
+                                        prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+                                      )}
+                                      style={{ flexShrink: 0 }}
+                                    />
+                                    <span style={{ wordBreak: 'break-word' }}>{label}</span>
+                                  </label>
+                                )
+                              })}
+                            </div>
+                            <button
+                              disabled={selectedStoreNames.length === 0 || updateDayStoreMut.isPending}
+                              onClick={() => {
+                                const storeName = selectedStoreNames.join(', ')
+                                updateDayStoreMut.mutate({ tripId: trip.id, date: d, storeName })
+                                setEditingStoreDate(null)
+                                setStoreSearch('')
+                                setSelectedStoreNames([])
+                              }}
+                              style={{ width: '100%', padding: '5px', fontSize: '11px', borderRadius: '5px', border: 'none', background: selectedStoreNames.length === 0 ? '#e2e8f0' : '#2563eb', color: selectedStoreNames.length === 0 ? '#94a3b8' : 'white', cursor: selectedStoreNames.length === 0 ? 'default' : 'pointer', fontWeight: '600', marginBottom: '3px' }}
+                            >
+                              {updateDayStoreMut.isPending ? 'Salvando...' : `Salvar (${selectedStoreNames.length})`}
+                            </button>
+                            <button
+                              onClick={() => { setEditingStoreDate(null); setStoreSearch(''); setSelectedStoreNames([]) }}
+                              style={{ width: '100%', padding: '3px', fontSize: '10px', borderRadius: '5px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', color: '#64748b' }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })()}
 
                   {/* ── Solicitação (centro de custo) ── */}
                   <td style={{ padding: '12px 12px', borderRight: '1px solid #e2e8f0', verticalAlign: 'middle', textAlign: 'center' }}>
                     {orig ? (
                       <div style={{ padding: '5px 8px', background: matched ? '#dcfce7' : '#f1f5f9', borderRadius: '6px', border: `1px solid ${matched ? '#86efac' : '#e2e8f0'}` }}>
-                        <div style={{ fontSize: '10px', fontWeight: '600', color: matched ? '#166534' : '#475569' }}>{orig.type}</div>
-                        {orig.storeName && <div style={{ fontSize: '10px', color: matched ? '#16a34a' : '#94a3b8', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '130px' }}>{orig.storeName}</div>}
+                        <div style={{ fontSize: '10px', fontWeight: '600', color: matched ? '#166534' : '#475569' }}>{costCenterIcon(orig.type)} {orig.type}</div>
                         <div style={{ fontSize: '13px', fontWeight: '800', color: matched ? '#15803d' : '#0f172a', marginTop: '3px' }}>{formatCurrency(Number(orig.value))}</div>
                       </div>
                     ) : (
@@ -1031,7 +1157,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
                       </td>
                       <td style={{ ...numTd, background: rowSaldoBg }}>
                         <div style={{ fontWeight: '800', fontSize: '13px', color: rowSaldoColor }}>{rowSaldo > 0.01 ? '+' : ''}{formatCurrency(Math.abs(rowSaldo))}</div>
-                        <div style={{ fontSize: '10px', color: rowSaldoColor, marginTop: '2px', fontWeight: '600' }}>{rowSaldo > 0.01 ? 'disponível' : rowSaldo < -0.01 ? 'a receber' : '✓ ok'}</div>
+                        <div style={{ fontSize: '10px', color: rowSaldoColor, marginTop: '2px', fontWeight: '600' }}>{rowSaldo > 0.01 ? 'disponível' : rowSaldo < -0.01 ? 'ultrapassado' : '✓ ok'}</div>
                       </td>
                     </>)
                   })()}
@@ -1046,7 +1172,7 @@ function TabelaVerificacao({ trip }: { trip: any }) {
             <td style={{ ...numTd, fontWeight: '800', fontSize: '14px', color: '#6d28d9', borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>{formatCurrency(totalOrigGeral)}</td>
             <td style={{ ...numTd, fontWeight: '800', fontSize: '14px', color: totalGastoGeral > 0 ? '#92400e' : '#94a3b8', borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>{formatCurrency(totalGastoGeral)}</td>
             <td style={{ ...numTd, fontWeight: '800', fontSize: '14px', borderTop: '2px solid #e2e8f0', background: (totalOrigGeral - totalGastoGeral) > 0.01 ? '#f0fdf4' : (totalOrigGeral - totalGastoGeral) < -0.01 ? '#fef2f2' : '#f8fafc' }}>
-              {(() => { const s = totalOrigGeral - totalGastoGeral; const c = s > 0.01 ? '#15803d' : s < -0.01 ? '#dc2626' : '#64748b'; return (<><div style={{ fontWeight: '800', fontSize: '14px', color: c }}>{s > 0.01 ? '+' : ''}{formatCurrency(Math.abs(s))}</div><div style={{ fontSize: '10px', color: c, fontWeight: '600', marginTop: '2px' }}>{s > 0.01 ? 'disponível' : s < -0.01 ? 'a receber' : '✓ ok'}</div></>) })()}
+              {(() => { const s = totalOrigGeral - totalGastoGeral; const c = s > 0.01 ? '#15803d' : s < -0.01 ? '#dc2626' : '#64748b'; return (<><div style={{ fontWeight: '800', fontSize: '14px', color: c }}>{s > 0.01 ? '+' : ''}{formatCurrency(Math.abs(s))}</div><div style={{ fontSize: '10px', color: c, fontWeight: '600', marginTop: '2px' }}>{s > 0.01 ? 'disponível' : s < -0.01 ? 'ultrapassado' : '✓ ok'}</div></>) })()}
             </td>
           </tr>
         </tfoot>
@@ -1058,6 +1184,8 @@ function TabelaVerificacao({ trip }: { trip: any }) {
 // ─── Modal Prestação de Contas ────────────────────────────────────────────────
 function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
   const utils = trpc.useUtils()
+  const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
+  const storesList = storesData?.stores ?? []
   const expenses: any[] = trip.expenses ?? []
   const gastoExpenses    = expenses.filter((e: any) => e.subtype === 'gasto')
   const originalExpenses = expenses.filter((e: any) => e.subtype !== 'gasto')
@@ -1214,7 +1342,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
         </div>
         <div>
           <div style={{ fontSize: '15px', fontWeight: '700', color: statusConfig.text }}>{statusConfig.msg}</div>
-          {trip.stores && <div style={{ fontSize: '12px', color: statusConfig.text, opacity: 0.75, marginTop: '2px' }}>Viagem: {trip.stores} · {trip.reason ?? ''}</div>}
+          {trip.stores && <div style={{ fontSize: '12px', color: statusConfig.text, opacity: 0.75, marginTop: '2px' }}>Viagem: {trip.stores.split(', ').map((n: string) => { const s = storesList.find((x: any) => x.name === n.trim() || x.tradeName === n.trim()); return s ? (s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name)) : n.trim() }).join(' • ')} · {trip.reason ?? ''}</div>}
         </div>
         {isClosed && <div style={{ marginLeft: 'auto', flexShrink: 0 }}><div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>CONCLUÍDA</div></div>}
       </div>
@@ -1230,7 +1358,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
       {/* ── Lançamentos por dia */}
       <div style={{ fontSize: '13px', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Verificação por Dia</div>
       <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', marginBottom: '24px' }}>
-        <TabelaVerificacao trip={trip} />
+        <TabelaVerificacao trip={trip} storesList={storesList} />
       </div>
 
       {/* ── Ação */}
@@ -1532,7 +1660,7 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
                       </td>
                       <td style={tdSt}>
                         <div style={{ fontWeight: '500', color: '#0f172a' }}>{t.city}{t.state ? `/${t.state}` : ''}</div>
-                        {t.stores && <div style={{ fontSize: '11px', color: '#94a3b8', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.stores}</div>}
+                        {t.stores && <div style={{ fontSize: '11px', color: '#94a3b8', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.stores.split(', ').map((n: string) => { const s = storesList.find((x: any) => x.name === n.trim() || x.tradeName === n.trim()); return s ? (s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name)) : n.trim() }).join(' • ')}</div>}
                       </td>
                       <td style={tdSt}>
                         <div style={{ color: '#374151' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
@@ -1571,6 +1699,260 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   )
 }
 
+// ─── PDF Generator ───────────────────────────────────────────────────────────
+async function generateTripPDF(trip: any, storesList: any[]) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
+  const allExpenses: any[] = trip.expenses ?? []
+  const originalExp = allExpenses.filter((e: any) => e.subtype !== 'gasto')
+  const gastoExp    = allExpenses.filter((e: any) => e.subtype === 'gasto')
+  const spentAmount    = gastoExp.reduce((s: number, e: any) => s + Number(e.value), 0)
+  const advancedAmount = originalExp.reduce((s: number, e: any) => s + Number(e.value), 0) || Number(trip.advancedAmount ?? 0)
+  const balance    = advancedAmount - spentAmount
+  const toReturn   = Math.max(0, balance)
+  const toReceive  = Math.max(0, -balance)
+
+  const resolveStore = (n: string) => {
+    const s = storesList.find((x: any) => x.name === n.trim() || x.tradeName === n.trim())
+    return s ? (s.code ? '[' + s.code + '] ' + (s.tradeName || s.name) : (s.tradeName || s.name)) : n.trim()
+  }
+  const storeLabel = (trip.stores ?? '').split(', ').map(resolveStore).join(' | ')
+
+  const byDateOrig: Record<string, any[]> = {}
+  for (const e of originalExp) {
+    const d = e.date instanceof Date ? e.date.toISOString().slice(0, 10) : String(e.date).slice(0, 10)
+    if (!byDateOrig[d]) byDateOrig[d] = []
+    byDateOrig[d].push(e)
+  }
+  const byDateGasto: Record<string, any[]> = {}
+  for (const e of gastoExp) {
+    const d = e.date instanceof Date ? e.date.toISOString().slice(0, 10) : String(e.date).slice(0, 10)
+    if (!byDateGasto[d]) byDateGasto[d] = []
+    byDateGasto[d].push(e)
+  }
+  const datas = [...new Set([...Object.keys(byDateOrig), ...Object.keys(byDateGasto)])].sort()
+
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' })
+  const pageW = doc.internal.pageSize.getWidth()
+  const margin = 14
+
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(37, 99, 235)
+  doc.text('SFERA MULTIFRANQUIAS', margin, 13)
+
+  doc.setFontSize(16)
+  doc.setTextColor(15, 23, 42)
+  doc.text(trip.collaborator?.name ?? '—', margin, 21)
+
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 116, 139)
+  const subParts = [
+    trip.collaborator?.role || '',
+    formatDate(trip.startDate) + ' -> ' + formatDate(trip.endDate),
+    trip.city ? trip.city + (trip.state ? '/' + trip.state : '') : '',
+    storeLabel,
+    trip.reason ? 'Motivo: ' + trip.reason : '',
+  ].filter(Boolean).join('  |  ')
+  const subLines = doc.splitTextToSize(subParts, pageW - margin * 2)
+  doc.text(subLines, margin, 27)
+
+  let y = 27 + subLines.length * 5 + 4
+
+  autoTable(doc as any, {
+    startY: y,
+    body: [[
+      { content: 'ADIANTADO\n' + formatCurrency(advancedAmount), styles: { fillColor: [245, 243, 255] as [number,number,number], textColor: [109, 40, 217] as [number,number,number], fontStyle: 'bold' as const } },
+      { content: 'TOTAL GASTO\n' + formatCurrency(spentAmount) + '\n' + gastoExp.length + ' lancamento(s)', styles: { fillColor: [255, 251, 235] as [number,number,number], textColor: [146, 64, 14] as [number,number,number], fontStyle: 'bold' as const } },
+      toReturn > 0
+        ? { content: 'A DEVOLVER\n' + formatCurrency(toReturn) + '\ncolaborador -> empresa', styles: { fillColor: [254, 242, 242] as [number,number,number], textColor: [153, 27, 27] as [number,number,number], fontStyle: 'bold' as const } }
+        : { content: 'REEMBOLSO\n' + formatCurrency(toReceive) + '\nempresa -> colaborador', styles: { fillColor: [239, 246, 255] as [number,number,number], textColor: [30, 64, 175] as [number,number,number], fontStyle: 'bold' as const } },
+    ]],
+    theme: 'plain',
+    styles: { fontSize: 10, cellPadding: 6, halign: 'center' as const, valign: 'middle' as const },
+    margin: { left: margin, right: margin },
+  })
+
+  y = (doc as any).lastAutoTable.finalY + 6
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(55, 65, 81)
+  doc.text('VERIFICACAO POR DIA', margin, y)
+  y += 3
+
+  const tableBody: any[] = []
+  for (const d of datas) {
+    const dayOrig   = byDateOrig[d] ?? []
+    const dayGastos = byDateGasto[d] ?? []
+    const totalAdtD = dayOrig.reduce((s: number, e: any) => s + Number(e.value), 0)
+    const totalGstD = dayGastos.reduce((s: number, e: any) => s + Number(e.value), 0)
+    const saldoD    = totalAdtD - totalGstD
+    const dateObj   = new Date(d + 'T12:00:00')
+    const dateStr   = dateObj.toLocaleDateString('pt-BR')
+    const weekDay   = DIAS_SEMANA[dateObj.getDay()]
+    const saldoRgb: [number, number, number] = saldoD > 0.01 ? [21, 128, 61] : saldoD < -0.01 ? [220, 38, 38] : [100, 116, 139]
+    const gastosByType: Record<string, any[]> = {}
+    for (const e of dayGastos) {
+      if (!gastosByType[e.type]) gastosByType[e.type] = []
+      gastosByType[e.type].push(e)
+    }
+    const origRows = dayOrig.length > 0 ? dayOrig : [null]
+    const rowCount = origRows.length
+
+    origRows.forEach((orig: any, i: number) => {
+      const type = orig?.type ?? ''
+      const typeGastos = orig ? (gastosByType[type] ?? []) : dayGastos
+      const solText = orig
+        ? orig.type + (orig.storeName ? '\n' + orig.storeName : '') + '\n' + formatCurrency(Number(orig.value))
+        : '—'
+      const lancText = typeGastos.length > 0
+        ? typeGastos.map((e: any) =>
+            formatCurrency(Number(e.value)) + '  ' + (e.type || '') +
+            (e.paymentMethod ? '  (' + e.paymentMethod + ')' : '')
+          ).join('\n')
+        : 'Sem lancamentos'
+
+      const row: any[] = []
+      if (i === 0) {
+        row.push(
+          { content: dateStr + '\n' + weekDay, rowSpan: rowCount, styles: { halign: 'center' as const, valign: 'middle' as const, fillColor: [248, 250, 252] as [number,number,number], fontStyle: 'bold' as const, fontSize: 9 } },
+          { content: formatCurrency(totalAdtD), rowSpan: rowCount, styles: { halign: 'right' as const, valign: 'middle' as const, fontStyle: 'bold' as const, textColor: [109, 40, 217] as [number,number,number] } },
+          { content: formatCurrency(totalGstD), rowSpan: rowCount, styles: { halign: 'right' as const, valign: 'middle' as const, fontStyle: 'bold' as const, textColor: [146, 64, 14] as [number,number,number] } },
+          { content: (saldoD > 0.01 ? '+' : '') + formatCurrency(saldoD), rowSpan: rowCount, styles: { halign: 'right' as const, valign: 'middle' as const, fontStyle: 'bold' as const, textColor: saldoRgb } },
+        )
+      }
+      row.push(
+        { content: solText, styles: { halign: 'center' as const, valign: 'top' as const, fontSize: 8, cellPadding: 3 } },
+        { content: lancText, styles: { halign: 'left' as const, valign: 'top' as const, fontSize: 8, cellPadding: 3 } },
+      )
+      tableBody.push(row)
+    })
+  }
+
+  if (tableBody.length === 0) {
+    tableBody.push([{ content: 'Nenhuma solicitacao registrada.', colSpan: 6, styles: { halign: 'center' as const, textColor: [148, 163, 184] as [number,number,number] } }])
+  }
+
+  tableBody.push([
+    { content: 'TOTAL GERAL', colSpan: 2, styles: { halign: 'right' as const, fontStyle: 'bold' as const, fillColor: [248, 250, 252] as [number,number,number] } },
+    { content: formatCurrency(advancedAmount), styles: { halign: 'right' as const, fontStyle: 'bold' as const, textColor: [109, 40, 217] as [number,number,number], fillColor: [248, 250, 252] as [number,number,number] } },
+    { content: formatCurrency(spentAmount), styles: { halign: 'right' as const, fontStyle: 'bold' as const, textColor: [146, 64, 14] as [number,number,number], fillColor: [248, 250, 252] as [number,number,number] } },
+    { content: (balance >= 0 ? '+' : '') + formatCurrency(balance), colSpan: 2, styles: { halign: 'right' as const, fontStyle: 'bold' as const, textColor: (balance >= 0 ? [21, 128, 61] : [220, 38, 38]) as [number,number,number], fillColor: [248, 250, 252] as [number,number,number] } },
+  ])
+
+  autoTable(doc as any, {
+    startY: y,
+    head: [['Data', 'Adiantado', 'Total Gasto', 'Saldo', 'Solicitacao', 'Lancamentos']],
+    body: tableBody,
+    theme: 'grid',
+    headStyles: { fillColor: [248, 250, 252] as [number,number,number], textColor: [100, 116, 139] as [number,number,number], fontSize: 8, fontStyle: 'bold' as const, halign: 'center' as const },
+    styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' as const },
+    columnStyles: {
+      0: { cellWidth: 22, halign: 'center' as const },
+      1: { cellWidth: 26, halign: 'right' as const },
+      2: { cellWidth: 26, halign: 'right' as const },
+      3: { cellWidth: 26, halign: 'right' as const },
+      4: { cellWidth: 38, halign: 'center' as const },
+      5: { halign: 'left' as const },
+    },
+    margin: { left: margin, right: margin },
+  })
+
+  // ─── Histórico (timeline) ────────────────────────────────────────────────────
+  const tlJsonEvents: any[] = (() => { try { return trip.timeline ? JSON.parse(trip.timeline) : [] } catch { return [] } })()
+  const tlTypes = new Set(tlJsonEvents.map((e: any) => e.type))
+  const tlPrefix: any[] = []
+  if (!tlTypes.has('submitted') && (trip.submittedBy || trip.submittedAt)) {
+    tlPrefix.push({ type: 'submitted', user: trip.submittedBy, date: trip.submittedAt })
+  }
+  const tlMerged = [...tlPrefix, ...tlJsonEvents]
+  if (!tlTypes.has('validated') && (trip.validatedBy || trip.validatedAt)) {
+    tlMerged.push({ type: 'validated', user: trip.validatedBy, date: trip.validatedAt })
+  }
+  const timeline = tlMerged.sort((a: any, b: any) => {
+    if (!a.date) return -1
+    if (!b.date) return 1
+    return new Date(a.date).getTime() - new Date(b.date).getTime()
+  })
+
+  if (timeline.length > 0) {
+    const tlY = (doc as any).lastAutoTable.finalY + 8
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(55, 65, 81)
+    doc.text('HISTORICO', margin, tlY)
+
+    const tlLabelMap: Record<string, string> = {
+      submitted: 'Prestacao enviada',
+      validated: 'Prestacao validada',
+      rejected:  'Prestacao rejeitada',
+    }
+    const tlColorMap: Record<string, [number, number, number]> = {
+      submitted: [146, 64, 14],
+      validated: [22, 101, 52],
+      rejected:  [153, 27, 27],
+    }
+    const tlFillMap: Record<string, [number, number, number]> = {
+      submitted: [255, 251, 235],
+      validated: [240, 253, 244],
+      rejected:  [254, 242, 242],
+    }
+
+    const tlBody = timeline.map((ev: any) => {
+      const label  = tlLabelMap[ev.type] ?? ev.type
+      const color  = tlColorMap[ev.type] ?? tlColorMap.submitted
+      const fill   = tlFillMap[ev.type]  ?? [255, 255, 255]
+      const dateStr = ev.date ? new Date(ev.date).toLocaleString('pt-BR') : '—'
+      const userStr = ev.user ? ev.user : '—'
+      let detail = ''
+      if (ev.returnedAmount != null && ev.returnedAmount > 0) {
+        detail = 'Valor devolvido: ' + formatCurrency(ev.returnedAmount)
+      }
+      if (ev.comment) {
+        detail = detail ? detail + '\n' + ev.comment : ev.comment
+      }
+      return [
+        { content: label, styles: { fontStyle: 'bold' as const, textColor: color, fillColor: fill } },
+        { content: userStr, styles: { fillColor: fill } },
+        { content: dateStr, styles: { fillColor: fill } },
+        { content: detail, styles: { fillColor: fill, fontSize: 8, textColor: [100, 116, 139] as [number, number, number] } },
+      ]
+    })
+
+    autoTable(doc as any, {
+      startY: tlY + 3,
+      head: [['Evento', 'Por', 'Data/Hora', 'Detalhe']],
+      body: tlBody,
+      theme: 'grid',
+      headStyles: { fillColor: [248, 250, 252] as [number,number,number], textColor: [100, 116, 139] as [number,number,number], fontSize: 8, fontStyle: 'bold' as const },
+      styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' as const },
+      columnStyles: {
+        0: { cellWidth: 50 },
+        1: { cellWidth: 45 },
+        2: { cellWidth: 38 },
+        3: { halign: 'left' as const },
+      },
+      margin: { left: margin, right: margin },
+    })
+  }
+
+  const pageCount = doc.getNumberOfPages()
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(148, 163, 184)
+    doc.text(
+      'Gerado em ' + new Date().toLocaleDateString('pt-BR') + ' as ' + new Date().toLocaleTimeString('pt-BR') + '   Pagina ' + p + ' de ' + pageCount,
+      margin,
+      doc.internal.pageSize.getHeight() - 7
+    )
+  }
+
+  const safeName = (trip.collaborator?.name ?? 'colaborador').replace(/\s+/g, '-').toLowerCase()
+  doc.save('prestacao-' + safeName + '.pdf')
+}
+
 // ─── Aba: Em Andamento ───────────────────────────────────────────────────────
 function AbaEmAndamento() {
   const [page, setPage] = useState(1)
@@ -1589,6 +1971,7 @@ function AbaEmAndamento() {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
   const [prestacaoTripId, setPrestacaoTripId] = useState<string | null>(null)
   const [deleteTripId, setDeleteTripId] = useState<string | null>(null)
+  const [pdfTripId, setPdfTripId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const utils = trpc.useUtils()
@@ -1604,13 +1987,20 @@ function AbaEmAndamento() {
     createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
     rejectedOnly: filterStatus === 'REJECTED' ? true : undefined,
     excludeRejected: filterStatus === 'OPEN' ? true : undefined,
-  })
+  }, { refetchOnMount: 'always' })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
   const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
   const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
+  const { data: pdfTripDetail } = trpc.auditTrips.getById.useQuery({ id: pdfTripId! }, { enabled: !!pdfTripId })
   const storesList = storesData?.stores ?? []
   const tiposDisponiveis = costTypes && costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
+
+  useEffect(() => {
+    if (!pdfTripDetail || !pdfTripId) return
+    setPdfTripId(null)
+    generateTripPDF(pdfTripDetail, storesList)
+  }, [pdfTripDetail])
 
   const updateTripMut = trpc.auditTrips.update.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setEditTripId(null); setError('') }, onError: e => setError(e.message) })
   const deleteTripMut = trpc.auditTrips.delete.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setDeleteTripId(null) } })
@@ -1681,9 +2071,9 @@ function AbaEmAndamento() {
             </select>
           </Field>
           <Field label="Loja">
-            <select style={inp} value={expForm.storeName} onChange={e => { const s = storesList.find((x: any) => x.name === e.target.value); setE('storeName', e.target.value); if (s?.city) setE('cityUf', `${s.city}/${s.state}`) }}>
+            <select style={inp} value={expForm.storeName} onChange={e => { const s = storesList.find((x: any) => x.name === e.target.value || x.tradeName === e.target.value); setE('storeName', e.target.value); if (s?.city) setE('cityUf', `${s.city}/${s.state}`) }}>
               <option value="">—</option>
-              {storesList.map((s: any) => <option key={s.id} value={s.name}>{s.code ? `[${s.code}] ` : ''}{s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
+              {storesList.map((s: any) => <option key={s.id} value={s.name}>{s.code ? `[${s.code}] ` : ''}{s.tradeName || s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
             </select>
           </Field>
           <Field label="Cidade / UF"><input style={inp} value={expForm.cityUf} onChange={e => setE('cityUf', e.target.value)} placeholder="Ex: São Paulo/SP" /></Field>
@@ -1770,13 +2160,15 @@ function AbaEmAndamento() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {groups.map((g: any) => {
               const isOpen = expandedGroup === g.key
-              const totalSpent = g.trips.reduce((s: number, t: any) => s + Number(t.spentAmount ?? 0), 0)
+              const totalAdvanced = g.trips.reduce((s: number, t: any) => s + Number(t.advancedAmount ?? 0), 0)
+              const totalSpent    = g.trips.reduce((s: number, t: any) => s + Number(t.spentAmount ?? 0), 0)
+              const totalBalance  = totalAdvanced - totalSpent
               const anyRejected  = g.trips.some((t: any) => t.status === 'OPEN' && t.rejectedAt)
               const anySubmitted = g.trips.some((t: any) => t.status === 'SUBMITTED')
               const groupBorder = anyRejected ? '#fca5a5' : anySubmitted ? '#fde68a' : '#e2e8f0'
               const groupBg     = anyRejected ? '#fff5f5' : 'white'
               const storeNamesInGroup = g.stores ? g.stores.split(', ').map((n: string) => n.trim()) : []
-              const citiesFromStores = [...new Set(storeNamesInGroup.map((name: string) => { const s = storesList.find((x: any) => x.name === name); return s?.city && s?.state ? `${s.city}/${s.state}` : s?.city ?? null }).filter(Boolean))] as string[]
+              const citiesFromStores = [...new Set(storeNamesInGroup.map((name: string) => { const s = storesList.find((x: any) => x.name === name || x.tradeName === name); return s?.city && s?.state ? `${s.city}/${s.state}` : s?.city ?? null }).filter(Boolean))] as string[]
               const cityTitle = citiesFromStores.length > 0 ? citiesFromStores.join(', ') : g.city ? `${g.city}${g.state ? `/${g.state}` : ''}` : null
               return (
                 <div key={g.key} style={{ border: `2px solid ${groupBorder}`, borderRadius: '14px', overflow: 'hidden', background: groupBg }}>
@@ -1791,12 +2183,26 @@ function AbaEmAndamento() {
                           {!anyRejected && anySubmitted && <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#fef3c7', color: '#92400e' }}>Enviada</span>}
                         </div>
                         <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>📅 {formatDate(g.startDate)} → {formatDate(g.endDate)}{g.reason && <span> · {g.reason}</span>}</div>
-                        {g.stores && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{g.stores}</div>}
+                        {g.stores && <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{g.stores.split(', ').map((n: string) => { const s = storesList.find((x: any) => x.name === n.trim() || x.tradeName === n.trim()); return s ? (s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name)) : n.trim() }).join(' • ')}</div>}
                         {g.trips[0]?.createdAt && <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>Criado em: {new Date(g.trips[0].createdAt).toLocaleDateString('pt-BR')}</div>}
                       </div>
-                      <div style={{ textAlign: 'right', minWidth: '130px' }}>
-                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#0f172a' }}>{formatCurrency(totalSpent)}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{g.trips.length} colaborador{g.trips.length !== 1 ? 'es' : ''}</div>
+                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexShrink: 0 }}>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '10px', fontWeight: '600', color: '#6d28d9', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>Adiantado</div>
+                          <div style={{ fontSize: '15px', fontWeight: '800', color: '#6d28d9' }}>{formatCurrency(totalAdvanced)}</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '10px', fontWeight: '600', color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>Utilizado</div>
+                          <div style={{ fontSize: '15px', fontWeight: '800', color: '#92400e' }}>{formatCurrency(totalSpent)}</div>
+                        </div>
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '10px', fontWeight: '600', color: totalBalance >= 0 ? '#166534' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>{totalBalance >= 0 ? 'Saldo' : 'A Devolver'}</div>
+                          <div style={{ fontSize: '15px', fontWeight: '800', color: totalBalance >= 0 ? '#166534' : '#991b1b' }}>{totalBalance >= 0 ? '+' : ''}{formatCurrency(totalBalance)}</div>
+                        </div>
+                        <div style={{ textAlign: 'center', borderLeft: '1px solid #e2e8f0', paddingLeft: '16px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{g.trips.length}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>colaborador{g.trips.length !== 1 ? 'es' : ''}</div>
+                        </div>
                       </div>
                       <span style={{ fontSize: '14px', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
@@ -1826,6 +2232,7 @@ function AbaEmAndamento() {
                             </div>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={e => { e.stopPropagation(); setPrestacaoTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fde68a', background: '#fffbeb', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#92400e' }}>📊 Prestação</button>
+                              <button onClick={e => { e.stopPropagation(); setPdfTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #bfdbfe', background: '#eff6ff', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#1d4ed8' }}>📄 PDF</button>
                               <button onClick={e => { e.stopPropagation(); setDeleteTripId(t.id) }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}>Excluir</button>
                             </div>
                           </div>
@@ -1866,8 +2273,8 @@ function InformativosVinculados({ tripId }: { tripId: string }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
         {items.map((item: any) => (
           <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#1e40af', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: '600', whiteSpace: 'nowrap' }}>{new Date(item.date).toLocaleDateString('pt-BR')}</span>
-            <span style={{ background: '#dbeafe', padding: '1px 8px', borderRadius: '10px', fontWeight: '600', whiteSpace: 'nowrap' }}>{item.costCenterName}</span>
+            <span style={{ fontWeight: '600', whiteSpace: 'nowrap' }}>{formatDate(item.date)}</span>
+            <span style={{ background: '#dbeafe', padding: '1px 8px', borderRadius: '10px', fontWeight: '600', whiteSpace: 'nowrap' }}>{costCenterIcon(item.costCenterName)} {item.costCenterName}</span>
             {item.collaborator && <span style={{ color: '#3b82f6' }}>{item.collaborator.name}</span>}
             {item.storeName && <span style={{ color: '#64748b' }}>{item.storeName}</span>}
             {item.reason && <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.reason}</span>}
@@ -1889,6 +2296,8 @@ function AbaConcluidas() {
   const [filterCreatedFrom, setFilterCreatedFrom] = useState('')
   const [filterCreatedTo, setFilterCreatedTo] = useState('')
   const [prestacaoTripId, setPrestacaoTripId] = useState<string | null>(null)
+  const [pdfTripId, setPdfTripId] = useState<string | null>(null)
+  const [deleteTripId, setDeleteTripId] = useState<string | null>(null)
 
   const { data, isLoading } = trpc.auditTrips.list.useQuery({
     page, pageSize: 15, status: 'CLOSED',
@@ -1898,9 +2307,23 @@ function AbaConcluidas() {
     startDateTo: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
     createdAtFrom: filterCreatedFrom ? new Date(filterCreatedFrom) : undefined,
     createdAtTo: filterCreatedTo ? new Date(filterCreatedTo + 'T23:59:59') : undefined,
-  })
+  }, { refetchOnMount: 'always' })
+  const utils = trpc.useUtils()
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
+  const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
+  const storesList = storesData?.stores ?? []
   const { data: prestacaoDetail } = trpc.auditTrips.getById.useQuery({ id: prestacaoTripId! }, { enabled: !!prestacaoTripId })
+  const { data: pdfTripDetail } = trpc.auditTrips.getById.useQuery({ id: pdfTripId! }, { enabled: !!pdfTripId })
+
+  useEffect(() => {
+    if (!pdfTripDetail || !pdfTripId) return
+    setPdfTripId(null)
+    generateTripPDF(pdfTripDetail, storesList)
+  }, [pdfTripDetail])
+
+  const deleteTripMut = trpc.auditTrips.delete.useMutation({
+    onSuccess: () => { utils.auditTrips.list.invalidate(); setDeleteTripId(null) },
+  })
 
   const trips = data?.trips ?? []
   const hasFilters = filterCollabs.length || filterSearch || filterFrom || filterTo || filterCreatedFrom || filterCreatedTo
@@ -1908,6 +2331,15 @@ function AbaConcluidas() {
   return (
     <>
       {prestacaoTripId && prestacaoDetail && <PrestacaoModal trip={prestacaoDetail} onClose={() => setPrestacaoTripId(null)} />}
+      {deleteTripId && (
+        <Modal title="Confirmar Exclusão" onClose={() => setDeleteTripId(null)}>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta viagem e todas as despesas?</div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <Btn variant="outline" onClick={() => setDeleteTripId(null)}>Cancelar</Btn>
+            <Btn variant="danger" onClick={() => deleteTripMut.mutate({ id: deleteTripId })} disabled={deleteTripMut.isPending}>Excluir</Btn>
+          </div>
+        </Modal>
+      )}
 
       <div style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px', minWidth: '160px' }}>
@@ -1962,7 +2394,7 @@ function AbaConcluidas() {
                         {t.collaborator?.role && <span style={{ fontSize: '12px', color: '#64748b' }}>{t.collaborator.role}</span>}
                         <span style={{ padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '700', background: '#dcfce7', color: '#166534' }}>✓ Concluída</span>
                       </div>
-                      <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{t.reason && <span>{t.reason}</span>}{t.stores && <span> · {t.stores}</span>}</div>
+                      <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>{t.reason && <span>{t.reason}</span>}{t.stores && <span> · {t.stores.split(', ').map((n: string) => { const s = storesList.find((x: any) => x.name === n.trim() || x.tradeName === n.trim()); return s ? (s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name)) : n.trim() }).join(' • ')}</span>}</div>
                       <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>{formatDate(t.startDate)} → {formatDate(t.endDate)}</div>
                       {t.createdAt && <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px' }}>Criado em: {new Date(t.createdAt).toLocaleDateString('pt-BR')}</div>}
                     </div>
@@ -1973,7 +2405,13 @@ function AbaConcluidas() {
                   </div>
                 </div>
                 <div style={{ padding: '0 16px 14px', borderTop: '1px solid #dcfce7', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <button onClick={() => setPrestacaoTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #86efac', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#166534', alignSelf: 'flex-start' }}>📊 Ver Prestação</button>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button onClick={() => setPrestacaoTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #86efac', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#166534' }}>📊 Ver Prestação</button>
+                      <button onClick={() => setPdfTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #bfdbfe', background: '#eff6ff', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#1d4ed8' }}>📄 PDF</button>
+                    </div>
+                    <button onClick={() => setDeleteTripId(t.id)} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}>Excluir</button>
+                  </div>
                   <InformativosVinculados tripId={t.id} />
                 </div>
               </div>
@@ -1994,13 +2432,15 @@ function AbaConcluidas() {
   )
 }
 
-// ─── Modal Novo Custo Informativo ─────────────────────────────────────────────
-function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList }: {
+// ─── Modal Novo/Editar Custo Informativo ──────────────────────────────────────
+function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList, itemId, initialData }: {
   onClose: () => void
   onCreated?: () => void
   collabsList: any[]
   costTypes: any[]
   storesList: any[]
+  itemId?: string
+  initialData?: any
 }) {
   const utils = trpc.useUtils()
   const today = new Date().toISOString().slice(0, 10)
@@ -2010,24 +2450,38 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
 
   const tipos = costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
 
+  const initDate = initialData?.date
+    ? (initialData.date instanceof Date ? initialData.date.toISOString() : String(initialData.date)).slice(0, 10)
+    : today
+  const initCollabIds: string[] = (() => {
+    if (!initialData) return []
+    try { return initialData.collaboratorIds ? JSON.parse(initialData.collaboratorIds) : (initialData.collaboratorId ? [initialData.collaboratorId] : []) } catch { return initialData.collaboratorId ? [initialData.collaboratorId] : [] }
+  })()
+  const initStoreNames: string[] = initialData?.storeName ? initialData.storeName.split(',').map((s: string) => s.trim()).filter(Boolean) : []
+  const initAttachments: string[] = (() => { try { return initialData?.attachmentUrls ? JSON.parse(initialData.attachmentUrls) : [] } catch { return [] } })()
+
   const [form, setForm] = useState({
-    costCenterName: '',
-    date: today,
-    reason: '',
-    value: '',
-    paymentMethod: '',
+    costCenterName: initialData?.costCenterName ?? '',
+    date: initDate,
+    reason: initialData?.reason ?? '',
+    value: initialData?.value != null ? String(initialData.value) : '',
+    paymentMethod: initialData?.paymentMethod ?? '',
   })
-  const [selectedCollabIds, setSelectedCollabIds] = useState<string[]>([])
-  const [selectedStoreNames, setSelectedStoreNames] = useState<string[]>([])
-  const [attachments, setAttachments] = useState<string[]>([])
+  const [selectedCollabIds, setSelectedCollabIds] = useState<string[]>(initCollabIds)
+  const [selectedStoreNames, setSelectedStoreNames] = useState<string[]>(initStoreNames)
+  const [attachments, setAttachments] = useState<string[]>(initAttachments)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const createMut = trpc.auditInformativeCosts.create.useMutation()
+  const updateMut = trpc.auditInformativeCosts.update.useMutation()
 
   function set(k: string, v: string) { setForm(f => ({ ...f, [k]: v })) }
 
-  const storeOptions = storesList.map((s: any) => (s.code ? `[${s.code}] ${s.name}` : s.name))
+  const storeOptions: StoreOption[] = storesList.map((s: any) => ({
+    name: s.tradeName || s.name,
+    label: s.code ? `[${s.code}] ${s.tradeName || s.name}` : (s.tradeName || s.name),
+  }))
 
   function handleFiles(ev: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(ev.target.files ?? [])
@@ -2044,21 +2498,36 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
     if (!form.costCenterName) { setError('Selecione o centro de custo.'); return }
     if (!form.date) { setError('Informe a data.'); return }
     if (!form.value || isNaN(Number(form.value.replace(',', '.')))) { setError('Informe o valor.'); return }
-    if (!attachments.length) { setError('Adicione ao menos um comprovante.'); return }
+    if (!itemId && !attachments.length) { setError('Adicione ao menos um comprovante.'); return }
     setError('')
     setSaving(true)
     try {
-      await createMut.mutateAsync({
-        costCenterName:  form.costCenterName,
-        date:            new Date(form.date + 'T12:00:00'),
-        storeName:       selectedStoreNames.length ? selectedStoreNames.join(', ') : undefined,
-        reason:          form.reason || undefined,
-        collaboratorId:  selectedCollabIds[0] || undefined,
-        collaboratorIds: selectedCollabIds.length ? selectedCollabIds : undefined,
-        value:           Number(form.value.replace(',', '.')),
-        paymentMethod:   form.paymentMethod || undefined,
-        attachmentUrls:  attachments.length ? attachments : undefined,
-      })
+      if (itemId) {
+        await updateMut.mutateAsync({
+          id:              itemId,
+          costCenterName:  form.costCenterName,
+          date:            new Date(form.date + 'T12:00:00'),
+          storeName:       selectedStoreNames.length ? selectedStoreNames.join(', ') : null,
+          reason:          form.reason || null,
+          collaboratorId:  selectedCollabIds[0] || null,
+          collaboratorIds: selectedCollabIds,
+          value:           Number(form.value.replace(',', '.')),
+          paymentMethod:   form.paymentMethod || null,
+          attachmentUrls:  attachments,
+        })
+      } else {
+        await createMut.mutateAsync({
+          costCenterName:  form.costCenterName,
+          date:            new Date(form.date + 'T12:00:00'),
+          storeName:       selectedStoreNames.length ? selectedStoreNames.join(', ') : undefined,
+          reason:          form.reason || undefined,
+          collaboratorId:  selectedCollabIds[0] || undefined,
+          collaboratorIds: selectedCollabIds.length ? selectedCollabIds : undefined,
+          value:           Number(form.value.replace(',', '.')),
+          paymentMethod:   form.paymentMethod || undefined,
+          attachmentUrls:  attachments.length ? attachments : undefined,
+        })
+      }
       utils.auditInformativeCosts.list.invalidate()
       onCreated ? onCreated() : onClose()
     } catch (e: any) {
@@ -2069,7 +2538,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   }
 
   return (
-    <Modal title="Novo Custo Informativo" onClose={onClose}>
+    <Modal title={itemId ? 'Editar Custo Informativo' : 'Novo Custo Informativo'} onClose={onClose}>
       {lightboxUrl && (
         <div onClick={() => setLightboxUrl(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.88)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out' }}>
           <img src={lightboxUrl} alt="comprovante" style={{ maxWidth: '90vw', maxHeight: '90vh', borderRadius: '8px' }} onClick={e => e.stopPropagation()} />
@@ -2172,7 +2641,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
 
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
         <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
-        <Btn onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar'}</Btn>
+        <Btn onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : itemId ? 'Salvar' : 'Cadastrar'}</Btn>
       </div>
     </Modal>
   )
@@ -2186,6 +2655,7 @@ function AbaInformativos() {
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
   const [showNew, setShowNew] = useState(false)
+  const [editItem, setEditItem] = useState<any | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   const { data, isLoading } = trpc.auditInformativeCosts.list.useQuery({
@@ -2218,6 +2688,17 @@ function AbaInformativos() {
           collabsList={collabs ?? []}
           costTypes={costTypes ?? []}
           storesList={storesList}
+        />
+      )}
+      {editItem && (
+        <NovoCustoInformativoModal
+          onClose={() => setEditItem(null)}
+          onCreated={() => setEditItem(null)}
+          collabsList={collabs ?? []}
+          costTypes={costTypes ?? []}
+          storesList={storesList}
+          itemId={editItem.id}
+          initialData={editItem}
         />
       )}
       {deleteId && (
@@ -2283,10 +2764,10 @@ function AbaInformativos() {
                   <tr key={item.id} style={{ background: 'white' }}
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'white'}>
-                    <td style={{ ...tdSt, whiteSpace: 'nowrap', color: '#374151' }}>{new Date(item.date).toLocaleDateString('pt-BR')}</td>
+                    <td style={{ ...tdSt, whiteSpace: 'nowrap', color: '#374151' }}>{formatDate(item.date)}</td>
                     <td style={tdSt}>
                       <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', background: '#eff6ff', color: '#1d4ed8' }}>
-                        ℹ️ {item.costCenterName}
+                        {costCenterIcon(item.costCenterName)} {item.costCenterName}
                       </span>
                     </td>
                     <td style={{ ...tdSt, maxWidth: '200px' }}>
@@ -2354,10 +2835,16 @@ function AbaInformativos() {
                       })()}
                     </td>
                     <td style={{ ...tdSt, textAlign: 'right' }}>
-                      <button onClick={() => setDeleteId(item.id)}
-                        style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px' }}>
-                        Excluir
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button onClick={() => setEditItem(item)}
+                          style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', fontSize: '11px' }}>
+                          Editar
+                        </button>
+                        <button onClick={() => setDeleteId(item.id)}
+                          style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', cursor: 'pointer', fontSize: '11px' }}>
+                          Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

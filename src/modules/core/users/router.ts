@@ -97,8 +97,10 @@ export const usersRouter = createTRPCRouter({
   create: protectedProcedure
     .input(createUserSchema)
     .mutation(async ({ input, ctx }) => {
-      const existing = await ctx.db.user.findUnique({
-        where: { email: input.email.toLowerCase() },
+      const emailLower = input.email.toLowerCase()
+
+      const existing = await ctx.db.user.findFirst({
+        where: { email: emailLower, deletedAt: null },
       })
       if (existing) {
         throw new TRPCError({ code: 'CONFLICT', message: 'E-mail já cadastrado.' })
@@ -106,27 +108,60 @@ export const usersRouter = createTRPCRouter({
 
       const passwordHash = await hashPassword(input.password)
 
-      const user = await ctx.db.user.create({
-        data: {
-          name: input.name,
-          email: input.email.toLowerCase(),
-          passwordHash,
-          phone: input.phone,
-          document: input.document,
-          status: 'ACTIVE',
-          mustChangePassword: true,
-          createdBy: ctx.session.user.id,
-          roles: {
-            create: input.roleIds.map((roleId) => ({
-              roleId,
-              assignedBy: ctx.session.user.id,
-            })),
-          },
-          storeScopes: {
-            create: input.storeScopes,
-          },
-        },
+      // If a soft-deleted user with same email exists, restore it instead of creating a duplicate
+      const deleted = await ctx.db.user.findFirst({
+        where: { email: emailLower, deletedAt: { not: null } },
       })
+
+      let user: any
+      if (deleted) {
+        await ctx.db.userRole.deleteMany({ where: { userId: deleted.id } })
+        await ctx.db.userStoreScope.deleteMany({ where: { userId: deleted.id } })
+        user = await ctx.db.user.update({
+          where: { id: deleted.id },
+          data: {
+            name: input.name,
+            passwordHash,
+            phone: input.phone ?? null,
+            document: input.document ?? null,
+            status: 'ACTIVE',
+            mustChangePassword: true,
+            deletedAt: null,
+            createdBy: ctx.session.user.id,
+            roles: {
+              create: input.roleIds.map((roleId) => ({
+                roleId,
+                assignedBy: ctx.session.user.id,
+              })),
+            },
+            storeScopes: {
+              create: input.storeScopes,
+            },
+          },
+        })
+      } else {
+        user = await ctx.db.user.create({
+          data: {
+            name: input.name,
+            email: emailLower,
+            passwordHash,
+            phone: input.phone,
+            document: input.document,
+            status: 'ACTIVE',
+            mustChangePassword: true,
+            createdBy: ctx.session.user.id,
+            roles: {
+              create: input.roleIds.map((roleId) => ({
+                roleId,
+                assignedBy: ctx.session.user.id,
+              })),
+            },
+            storeScopes: {
+              create: input.storeScopes,
+            },
+          },
+        })
+      }
 
       await ctx.db.auditLog.create({
         data: {
@@ -284,5 +319,22 @@ export const usersRouter = createTRPCRouter({
       })
 
       return { success: true }
+    }),
+
+  cleanupTestData: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (!ctx.session.user.roles.includes('platform-admin')) throw new TRPCError({ code: 'FORBIDDEN' })
+      const now = new Date()
+      const [trips, informativos] = await Promise.all([
+        ctx.db.auditTrip.updateMany({
+          where: { deletedAt: null, status: { not: 'OPEN' } },
+          data: { deletedAt: now },
+        }),
+        ctx.db.auditInformativeCost.updateMany({
+          where: { deletedAt: null },
+          data: { deletedAt: now },
+        }),
+      ])
+      return { viagens: trips.count, informativos: informativos.count }
     }),
 })

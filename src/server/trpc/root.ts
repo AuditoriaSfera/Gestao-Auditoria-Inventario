@@ -18,6 +18,7 @@ import { auditCostTypesRouter } from '@/modules/audit-cost/cost-types-router'
 import { auditInformativeCostsRouter } from '@/modules/audit-cost/informative-costs-router'
 import { auditCollaboratorSalariesRouter } from '@/modules/audit-cost/collaborator-salaries-router'
 import { assetsRouter } from '@/modules/assets/router'
+import { patrimonioRouter } from '@/modules/assets/patrimonio-router'
 import { inventoryRouter } from '@/modules/inventory/router'
 import { inventoryKpiRouter } from '@/modules/inventory-kpi/router'
 import { inventoryCostRouter } from '@/modules/inventory-cost/router'
@@ -43,6 +44,7 @@ export const appRouter = createTRPCRouter({
   auditInformativeCosts: auditInformativeCostsRouter,
   auditCollaboratorSalaries: auditCollaboratorSalariesRouter,
   assets: assetsRouter,
+  patrimonio: patrimonioRouter,
   inventory: inventoryRouter,
   inventoryKpi: inventoryKpiRouter,
   inventoryCost: inventoryCostRouter,

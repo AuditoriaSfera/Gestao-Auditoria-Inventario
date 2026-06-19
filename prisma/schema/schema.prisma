@@ -1595,6 +1595,125 @@ model AssetAudit {
 }
 
 // ============================================================
+// MÓDULO 7B — PATRIMÔNIO DA EQUIPE (scanners, celulares)
+// ============================================================
+
+model EquipamentoPatrimonio {
+  id           String  @id @default(cuid())
+  codigo       String  @unique
+  tipo         String  // scanner | celular | outro
+  serialNumber String?
+  descricao    String?
+  observacoes  String? @db.Text
+  condicao     String? @default("bom") // bom | ruim | apagado | sem_identificacao | verificar
+
+  // DISPONIVEL | COM_COLABORADOR | NO_ESCRITORIO | EM_LOJA | EM_MANUTENCAO | EXTRAVIADO | INATIVO | EM_VERIFICACAO
+  status String @default("DISPONIVEL")
+
+  colaboradorId   String? // AuditCollaborator.id (lookup only, no FK)
+  colaboradorNome String? // cached name for performance
+  lojaId          String? // Store.id (lookup only, no FK)
+  lojaNome        String? // cached name
+  localNota       String? // free-text location note
+
+  movimentacoes MovimentacaoEquipamento[]
+  entregas      EntregaEquipamentoLoja[]
+  anexos        AnexoEquipamento[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  createdBy String?
+  updatedBy String?
+
+  @@index([tipo])
+  @@index([status])
+  @@index([colaboradorId])
+  @@map("equipamentos_patrimonio")
+}
+
+model MovimentacaoEquipamento {
+  id            String @id @default(cuid())
+  equipamentoId String
+
+  // CADASTRO | TRANSFERENCIA | ENVIO_MANUTENCAO | RETORNO_MANUTENCAO | ENTREGA_LOJA | RETIRADA_LOJA | DISPONIBILIZACAO | EXTRAVIO | INATIVACAO | ATUALIZACAO
+  tipo String
+
+  statusAnterior String?
+  statusNovo     String
+
+  origemDesc  String? // human-readable origin
+  destinoDesc String? // human-readable destination
+
+  colaboradorAnteriorId   String?
+  colaboradorAnteriorNome String?
+  colaboradorNovoId       String?
+  colaboradorNovoNome     String?
+  lojaAnteriorNome        String?
+  lojaNovoNome            String?
+
+  observacoes String? @db.Text
+  anexoUrl    String?
+
+  userId   String?
+  userName String?
+
+  equipamento EquipamentoPatrimonio @relation(fields: [equipamentoId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([equipamentoId])
+  @@index([createdAt])
+  @@map("movimentacoes_equipamento")
+}
+
+model EntregaEquipamentoLoja {
+  id            String @id @default(cuid())
+  equipamentoId String
+
+  lojaId        String?
+  lojaNome      String?
+  dataEntrega   DateTime
+  nomeRecebedor String
+  cargoRecebedor String?
+  observacoes   String? @db.Text
+  anexoUrl      String?
+
+  userId   String?
+  userName String?
+
+  equipamento EquipamentoPatrimonio @relation(fields: [equipamentoId], references: [id])
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([equipamentoId])
+  @@map("entregas_equipamento_loja")
+}
+
+model AnexoEquipamento {
+  id            String @id @default(cuid())
+  equipamentoId String
+
+  // COMPROVANTE_ENTREGA | FOTO_EQUIPAMENTO | FOTO_NUMERO | LAUDO_MANUTENCAO | DOCUMENTO | OUTRO
+  tipo        String
+  url         String
+  nomeArquivo String?
+  descricao   String?
+
+  userId   String?
+  userName String?
+
+  equipamento EquipamentoPatrimonio @relation(fields: [equipamentoId], references: [id])
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([equipamentoId])
+  @@map("anexos_equipamento")
+}
+
+// ============================================================
 // MÓDULO 8 — INVENTÁRIO
 // ============================================================
 

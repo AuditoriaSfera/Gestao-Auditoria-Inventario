@@ -333,4 +333,56 @@ export const patrimonioRouter = createTRPCRouter({
       take: 500,
     })
   }),
+
+  // ── Import em lote (uso único para importar planilha) ─────────────────────
+  bulkCreate: protectedProcedure
+    .input(z.array(z.object({
+      codigo: z.string(),
+      tipo: z.string().default('scanner'),
+      serialNumber: z.string().optional(),
+      descricao: z.string().optional(),
+      marca: z.string().optional(),
+      modelo: z.string().optional(),
+      condicao: z.string().optional(),
+      status: z.string(),
+      lojaNome: z.string().optional(),
+      observacoes: z.string().optional(),
+    })))
+    .mutation(async ({ input, ctx }) => {
+      const userName = ctx.session.user.name ?? ctx.session.user.email ?? 'Import'
+      let criados = 0
+      let pulados = 0
+      for (const item of input) {
+        const existe = await ctx.db.equipamentoPatrimonio.findFirst({ where: { codigo: item.codigo } })
+        if (existe) { pulados++; continue }
+        const descFull = [item.descricao, item.marca, item.modelo].filter(Boolean).join(' — ')
+        const eq = await ctx.db.equipamentoPatrimonio.create({
+          data: {
+            codigo: item.codigo,
+            tipo: item.tipo,
+            serialNumber: item.serialNumber ?? null,
+            descricao: descFull || null,
+            condicao: item.condicao ?? 'bom',
+            status: item.status,
+            lojaNome: item.lojaNome ?? null,
+            observacoes: item.observacoes ?? null,
+            createdBy: ctx.session.user.id,
+          },
+        })
+        await ctx.db.movimentacaoEquipamento.create({
+          data: {
+            equipamentoId: eq.id,
+            tipo: 'CADASTRO',
+            statusAnterior: null,
+            statusNovo: item.status,
+            destinoDesc: item.lojaNome ?? item.status,
+            observacoes: 'Importação planilha',
+            userId: ctx.session.user.id,
+            userName,
+          },
+        })
+        criados++
+      }
+      return { criados, pulados }
+    }),
 })

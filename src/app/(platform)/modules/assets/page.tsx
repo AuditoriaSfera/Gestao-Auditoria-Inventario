@@ -30,6 +30,89 @@ const CONDICOES = [
   { value: 'verificar', label: 'Verificar' },
 ]
 
+// ── Dados importação planilha ─────────────────────────────────────────────────
+const DADOS_PLANILHA = [
+  { codigo:'LT-0001', lojaNome:'O Boticário ER Alcântara',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0002', lojaNome:'O Boticário Inhapim',              status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0003', lojaNome:'O Boticário ER Alcântara',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016214', condicao:'bom' },
+  { codigo:'LT-0004', lojaNome:'O Boticário Jardim Norte',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016238', condicao:'bom' },
+  { codigo:'LT-0005', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016229', condicao:'bom' },
+  { codigo:'LT-0006', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016240', condicao:'bom' },
+  { codigo:'LT-0007', lojaNome:'O Boticário Manhumirim',           status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016221', condicao:'bom' },
+  { codigo:'LT-0008', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016212', condicao:'bom' },
+  { codigo:'LT-0009', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016224', condicao:'bom' },
+  { codigo:'LT-0010', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016235', condicao:'bom' },
+  { codigo:'LT-0011', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016244', condicao:'ruim' },
+  { codigo:'LT-0012', lojaNome:'O Boticário ER Juiz de Fora',      status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016209', condicao:'bom' },
+  { codigo:'LT-0013', lojaNome:'Boticário Campinho',               status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016242', condicao:'ruim' },
+  { codigo:'LT-0014', lojaNome:'Boticário Valqueire',              status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016197', condicao:'bom' },
+  { codigo:'LT-0015', lojaNome:'O Boticário ER Partage',           status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016203', condicao:'bom' },
+  { codigo:'LT-0016', lojaNome:'O Boticário Mister',               status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016228', condicao:'bom' },
+  { codigo:'LT-0017', lojaNome:'O Boticário Além Paraíba',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016236', condicao:'bom' },
+  { codigo:'LT-0018', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016208', condicao:'bom' },
+  { codigo:'LT-0019', lojaNome:'O Boticário ER Benfica',           status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016210', condicao:'bom' },
+  { codigo:'LT-0020', lojaNome:'O Boticário ER Caratinga',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016198', condicao:'bom' },
+  { codigo:'LT-0021', lojaNome:'O Boticário Alcântara',            status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016213', condicao:'bom' },
+  { codigo:'LT-0022', lojaNome:'O Boticário Barroso',              status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016220', condicao:'bom' },
+  { codigo:'4552',    lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016216', condicao:'bom',  observacoes:'Código antigo: LT-0023' },
+  { codigo:'LT-0024', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      serialNumber:'99016200', condicao:'bom' },
+  { codigo:'LT-0025', lojaNome:'O Boticário ER Caratinga',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016241', condicao:'bom' },
+  { codigo:'LT-0026', lojaNome:'O Boticário ER Alcântara',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016206', condicao:'bom' },
+  { codigo:'003249',  lojaNome:'O Boticário Manhuaçu',             status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99016201', condicao:'bom',  observacoes:'Código antigo: LT-0027' },
+  { codigo:'LT-0028', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0029', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0030', lojaNome:'O Boticário Norte 1° Piso',        status:'EM_LOJA',      marca:'Elgin',    modelo:'B220',       condicao:'bom' },
+  { codigo:'LT-0031', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0032', lojaNome:'O Boticário Sulacap',              status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0046', lojaNome:'O Boticário Shopping Madureira',   status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0034', lojaNome:'O Boticário Valqueire',            status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0037', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0038', lojaNome:'O Boticário ER Partage',           status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0039', lojaNome:'O Boticário Rodo',                 status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0040', lojaNome:'O Boticário Carrefour (BTSG)',      status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      serialNumber:'99011515', condicao:'bom' },
+  { codigo:'LT-0041', lojaNome:'O Boticário Caratinga Raul Soares', status:'EM_LOJA',     marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0042', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0043', lojaNome:'O Boticário ER Juiz de Fora',      status:'EM_LOJA',      marca:'ScanHero', modelo:'SC-1092BT',  condicao:'bom' },
+  { codigo:'LT-0084', lojaNome:'O Boticário Alameda',              status:'EM_LOJA',      marca:'Elgin',    modelo:'BR220',      condicao:'bom' },
+  { codigo:'LT-0045', lojaNome:'O Boticário Santa Cruz',           status:'EM_LOJA',      marca:'ScanHero', modelo:'SC-1092BT',  condicao:'ruim' },
+  { codigo:'LT-0091', lojaNome:'O Boticário Independencia',        status:'EM_LOJA',      marca:'ScanHero', modelo:'SC-1092BT',  condicao:'bom' },
+  { codigo:'LT-0044', lojaNome:'O Boticário Mercadão',             status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0050', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0046-B', lojaNome:'O Boticário ER Madureira',       status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom',  observacoes:'Código duplicado na planilha — originalmente LT-0046' },
+  { codigo:'LT-0047', lojaNome:'O Boticário Polo 1',               status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0048', lojaNome:'O Boticário BR',                   status:'EM_LOJA',      marca:'Nyer',     modelo:'NT100-1D',   condicao:'bom' },
+  { codigo:'LT-0049', lojaNome:'O Boticário Guanabara',            status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'003150',  lojaNome:'O Boticário Halfeld',              status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom',  observacoes:'Código antigo: LT-0026' },
+  { codigo:'SEM-COD-01', lojaNome:'O Boticário Carrefour',         status:'EM_LOJA',      marca:'ScanHero', modelo:'SC-1092BT',  condicao:'bom',  observacoes:'Equipamento sem código cadastrado na planilha' },
+  { codigo:'LT-0053', lojaNome:'O Boticário Espera Feliz',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0054', lojaNome:'O Boticário Carangola',            status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0055', lojaNome:'O Boticário Caratinga Olegario',   status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0056', lojaNome:'O Boticário ER Carangola',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0057', lojaNome:'O Boticário ER Carangola',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017024', condicao:'bom' },
+  { codigo:'LT-0058', lojaNome:'O Boticário Santos Dumont',        status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017027', condicao:'bom' },
+  { codigo:'LT-0059', lojaNome:'O Boticário Norte 2° Piso',        status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017014', condicao:'bom' },
+  { codigo:'LT-0060', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      serialNumber:'99017015', condicao:'bom' },
+  { codigo:'LT-0061', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      serialNumber:'99017029', condicao:'bom' },
+  { codigo:'LT-0062', lojaNome:'O Boticário ER Carangola',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017011', condicao:'bom' },
+  { codigo:'LT-0063', lojaNome:'O Boticário ER Manhuaçu',          status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017002', condicao:'bom' },
+  { codigo:'LT-0064', lojaNome:'O Boticário Carandaí',             status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017018', condicao:'bom' },
+  { codigo:'LT-0065', lojaNome:'O Boticário Marechal',             status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017009', condicao:'bom' },
+  { codigo:'LT-0066', lojaNome:'O Boticário Raul Soares',          status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017021', condicao:'bom' },
+  { codigo:'LT-0067', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      serialNumber:'99017022', condicao:'bom' },
+  { codigo:'LT-0068', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      serialNumber:'99017013', condicao:'bom' },
+  { codigo:'LT-0069', lojaNome:'Quem Disse Berenice?',             status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      serialNumber:'99017019', condicao:'bom' },
+  { codigo:'LT-0070', lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      serialNumber:'99017017', condicao:'bom' },
+  { codigo:'1164',    lojaNome:'O Boticário Leopoldina',           status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'0862',    lojaNome:undefined,                          status:'NO_ESCRITORIO',marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0051', lojaNome:'O Boticário ER 3R',               status:'EM_LOJA',      marca:'ScanHero', modelo:'SC-1092BT',  condicao:'bom' },
+  { codigo:'LT-0071', lojaNome:'O Boticário Campinho',            status:'EM_LOJA',      marca:'Nyer',     modelo:'NT100-1D',   condicao:'bom' },
+  { codigo:'LT-0033', lojaNome:'O Boticário ER Santos Dumont',    status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'003116',  lojaNome:'Hering Icarai',                   status:'EM_LOJA',      marca:'ScanHero', modelo:'SC-1092BT',  condicao:'bom' },
+  { codigo:'003206',  lojaNome:'Boticário ER Leopoldina',         status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+  { codigo:'LT-0072', lojaNome:undefined,                         status:'NO_ESCRITORIO',marca:'ScanHero', modelo:'SC-1092BT',  condicao:'bom' },
+  { codigo:'LT-0073', lojaNome:'Boticário Ipanema',               status:'EM_LOJA',      marca:'Elgin',    modelo:'BT220',      condicao:'bom' },
+].map(d => ({ ...d, tipo: 'scanner', descricao: 'Leitor de código de barras' }))
+
 const TIPO_MOV_LABELS: Record<string, string> = {
   CADASTRO: 'Cadastro',
   TRANSFERENCIA: 'Transferência',
@@ -500,7 +583,7 @@ function ModalDetalhe({ itemId, colaboradores, lojas, onClose, onRefresh }: { it
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function PatrimonioPage() {
-  const [tab, setTab] = useState<'dashboard' | 'lista' | 'colaboradores'>('dashboard')
+  const [tab, setTab] = useState<'dashboard' | 'lista' | 'colaboradores' | 'emlojas'>('dashboard')
   const [search, setSearch] = useState('')
   const [filterTipo, setFilterTipo] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
@@ -510,6 +593,9 @@ export default function PatrimonioPage() {
   const [detailId, setDetailId] = useState<string | null>(null)
   const [entregaItem, setEntregaItem] = useState<any>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [showImport, setShowImport] = useState(false)
+  const [importResult, setImportResult] = useState<{ criados: number; pulados: number } | null>(null)
+  const [lojaSearch, setLojaSearch] = useState('')
 
   const utils = trpc.useUtils()
   function refetchAll() { utils.patrimonio.list.invalidate(); utils.patrimonio.dashboard.invalidate() }
@@ -519,8 +605,29 @@ export default function PatrimonioPage() {
   const { data: colaboradores = [] } = trpc.patrimonio.listColaboradores.useQuery()
   const { data: lojas = [] } = trpc.patrimonio.listLojas.useQuery()
   const deleteMut = trpc.patrimonio.softDelete.useMutation({ onSuccess: () => { refetchAll(); setDeleteId(null) } })
+  const bulkCreateMut = trpc.patrimonio.bulkCreate.useMutation({
+    onSuccess: (res) => { setImportResult(res); refetchAll() },
+  })
 
   const items: any[] = listData?.items ?? []
+
+  // Agrupamento de scanners em lojas
+  const byLoja = useMemo(() => {
+    const map = new Map<string, any[]>()
+    const emLojas = items.filter(i => i.status === 'EM_LOJA' && i.tipo === 'scanner')
+    for (const item of emLojas) {
+      const loja = item.lojaNome ?? '(Loja não identificada)'
+      const prev = map.get(loja) ?? []
+      map.set(loja, [...prev, item])
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+  }, [items])
+
+  const byLojaFiltrado = useMemo(() => {
+    if (!lojaSearch) return byLoja
+    const s = lojaSearch.toLowerCase()
+    return byLoja.filter(([nome]) => nome.toLowerCase().includes(s))
+  }, [byLoja, lojaSearch])
 
   // Agrupamento por colaborador
   const byColaborador = useMemo(() => {
@@ -577,19 +684,60 @@ export default function PatrimonioPage() {
         </Modal>
       )}
 
+      {/* Modal de importação */}
+      {showImport && (
+        <Modal title="Importar Planilha de Leitores" onClose={() => { setShowImport(false); setImportResult(null) }}>
+          {importResult ? (
+            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>✅</div>
+              <div style={{ fontSize: '18px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Importação concluída!</div>
+              <div style={{ fontSize: '15px', color: '#374151', marginBottom: '4px' }}><strong>{importResult.criados}</strong> equipamento(s) criado(s)</div>
+              <div style={{ fontSize: '14px', color: '#64748b' }}><strong>{importResult.pulados}</strong> já existiam e foram pulados</div>
+              <button onClick={() => { setShowImport(false); setImportResult(null) }} style={{ marginTop: '20px', padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>Fechar</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ background: '#eff6ff', borderRadius: '10px', padding: '14px', fontSize: '13px', color: '#1d4ed8' }}>
+                <strong>79 equipamentos</strong> serão importados da planilha "Patrimônio Leitores de Código de Barras".<br/>
+                Equipamentos com código já cadastrado serão pulados automaticamente.
+              </div>
+              <div style={{ fontSize: '13px', color: '#374151', lineHeight: '1.6' }}>
+                <strong>Ajustes aplicados:</strong>
+                <ul style={{ margin: '6px 0 0 16px', padding: 0 }}>
+                  <li>LT-0046 duplicado: 2ª ocorrência renomeada para <code>LT-0046-B</code></li>
+                  <li>Sem código (Carrefour Elgin): código atribuído <code>SEM-COD-01</code></li>
+                  <li>Defeito/Quebrado: importados com condição <em>Ruim</em></li>
+                  <li>Antigo LT-XXXX: importados com o novo código + observação</li>
+                </ul>
+              </div>
+              {bulkCreateMut.isError && <div style={{ color: '#dc2626', fontSize: '13px' }}>{bulkCreateMut.error?.message}</div>}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+                <button onClick={() => setShowImport(false)} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#374151' }}>Cancelar</button>
+                <button onClick={() => bulkCreateMut.mutate(DADOS_PLANILHA)} disabled={bulkCreateMut.isPending} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: '#2563eb', color: 'white', cursor: bulkCreateMut.isPending ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: '700', opacity: bulkCreateMut.isPending ? 0.7 : 1 }}>
+                  {bulkCreateMut.isPending ? 'Importando...' : '📥 Importar 79 equipamentos'}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
       {/* Header */}
       <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '20px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>📦 Patrimônio</h1>
           <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>Gestão de scanners, celulares e equipamentos da equipe</div>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#2563eb', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>+ Novo Patrimônio</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={() => setShowImport(true)} style={{ padding: '10px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', color: '#374151', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>📥 Importar Planilha</button>
+          <button onClick={() => setShowCreate(true)} style={{ padding: '10px 20px', borderRadius: '10px', border: 'none', background: '#2563eb', color: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: '700' }}>+ Novo Patrimônio</button>
+        </div>
       </div>
 
       {/* Abas de navegação */}
       <div style={{ background: 'white', borderBottom: '1px solid #f1f5f9', padding: '0 28px', display: 'flex', gap: '0' }}>
-        {([['dashboard','🏠 Resumo'],['lista','📋 Lista Geral'],['colaboradores','👥 Por Responsável']] as const).map(([t, l]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: '14px 18px', border: 'none', borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: tab === t ? '700' : '500', color: tab === t ? '#2563eb' : '#64748b' }}>
+        {([['dashboard','🏠 Resumo'],['lista','📋 Lista Geral'],['emlojas','🏪 Scanners em Loja'],['colaboradores','👥 Por Responsável']] as const).map(([t, l]) => (
+          <button key={t} onClick={() => setTab(t as any)} style={{ padding: '14px 18px', border: 'none', borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent', background: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: tab === t ? '700' : '500', color: tab === t ? '#2563eb' : '#64748b', whiteSpace: 'nowrap' }}>
             {l}
           </button>
         ))}
@@ -723,6 +871,59 @@ export default function PatrimonioPage() {
                 </table>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ── TAB: SCANNERS EM LOJA ──────────────────────────────────────────── */}
+        {tab === 'emlojas' && (
+          <div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                placeholder="🔍 Buscar por nome da loja..."
+                value={lojaSearch}
+                onChange={e => setLojaSearch(e.target.value)}
+                style={{ ...inp, maxWidth: '300px', flex: '1' }}
+              />
+              <div style={{ display: 'flex', gap: '10px', marginLeft: 'auto', fontSize: '13px', color: '#64748b' }}>
+                <span>🏪 <strong>{byLoja.length}</strong> loja(s)</span>
+                <span>📡 <strong>{byLoja.reduce((s, [, v]) => s + v.length, 0)}</strong> scanner(s) em loja</span>
+              </div>
+            </div>
+
+            {byLojaFiltrado.length === 0 ? (
+              <div style={{ padding: '48px', textAlign: 'center', color: '#94a3b8', background: 'white', borderRadius: '12px' }}>
+                {byLoja.length === 0 ? 'Nenhum scanner em loja cadastrado.' : 'Nenhuma loja encontrada com esse filtro.'}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '14px' }}>
+                {byLojaFiltrado.map(([lojaNome, scanners]) => {
+                  const temProblema = scanners.some(s => s.condicao === 'ruim' || s.condicao === 'verificar')
+                  return (
+                    <div key={lojaNome} style={{ background: 'white', borderRadius: '12px', border: `1px solid ${temProblema ? '#fecaca' : '#f1f5f9'}`, overflow: 'hidden' }}>
+                      <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: temProblema ? '#fef2f2' : '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: '700', fontSize: '13px', color: '#0f172a' }}>🏪 {lojaNome}</div>
+                        <span style={{ fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '20px', background: '#fef9c3', color: '#854d0e' }}>{scanners.length} scanner(s)</span>
+                      </div>
+                      <div style={{ padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {scanners.map((sc: any) => {
+                          const cor = sc.condicao === 'ruim' ? { bg: '#fef2f2', border: '#fecaca', text: '#991b1b' }
+                            : sc.condicao === 'verificar' ? { bg: '#fef3c7', border: '#fde68a', text: '#92400e' }
+                            : { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' }
+                          return (
+                            <button key={sc.id} onClick={() => setDetailId(sc.id)}
+                              title={`${sc.descricao ?? ''} · ${CONDICOES.find(c => c.value === sc.condicao)?.label ?? ''}`}
+                              style={{ padding: '4px 10px', borderRadius: '8px', border: `1px solid ${cor.border}`, background: cor.bg, cursor: 'pointer', fontSize: '12px', fontWeight: '700', color: cor.text }}>
+                              {sc.codigo}
+                              {sc.condicao === 'ruim' && ' ⚠️'}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

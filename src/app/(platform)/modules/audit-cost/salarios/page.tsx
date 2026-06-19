@@ -11,7 +11,9 @@ import { formatCurrency } from '@/lib/utils'
 
 function fmt(v: any): string {
   if (v == null) return ''
-  return new Date(v).toLocaleDateString('pt-BR')
+  const iso = v instanceof Date ? v.toISOString() : String(v)
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y}`
 }
 
 function custoTotal(salario: number, encargos: number): number {
@@ -478,7 +480,7 @@ export default function SalariosPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                {['Colaborador', 'Cargo', 'Salário Base', 'Encargos', 'Custo Total', 'Vigência', 'Status', 'Ações'].map(h => (
+                {['Colaborador', 'Cargo', 'Time', 'Salário Base', 'Encargos', 'Custo Total', 'Vigência', 'Status', 'Ações'].map(h => (
                   <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -495,6 +497,15 @@ export default function SalariosPage() {
                       <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '13px' }}>{item.collaborator?.name ?? '—'}</div>
                     </td>
                     <td style={tdStyle}><span style={{ fontSize: '13px', color: '#374151' }}>{item.cargo || '—'}</span></td>
+                    <td style={tdStyle}>
+                      <span style={{
+                        fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px', whiteSpace: 'nowrap',
+                        background: item.tipoTime === 'administrativo' ? '#eff6ff' : '#f0fdf4',
+                        color: item.tipoTime === 'administrativo' ? '#1d4ed8' : '#15803d',
+                      }}>
+                        {item.tipoTime === 'administrativo' ? '🖥️ Adm.' : '🏃 Campo'}
+                      </span>
+                    </td>
                     <td style={tdStyle}><span style={{ fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>{formatCurrency(sal)}</span></td>
                     <td style={tdStyle}><span style={{ fontSize: '13px', color: '#374151' }}>{formatCurrency(enc)}</span></td>
                     <td style={tdStyle}><span style={{ fontSize: '14px', fontWeight: '800', color: '#15803d' }}>{formatCurrency(tot)}</span></td>

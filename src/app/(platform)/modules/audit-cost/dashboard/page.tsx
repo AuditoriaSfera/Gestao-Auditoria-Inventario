@@ -1010,6 +1010,15 @@ export default function AuditDashboardPage() {
         map.set(sn, { ...prev, spent: prev.spent + share })
       }
     }
+    for (const ic of monthInformativeCosts) {
+      if (!ic.storeName) continue
+      const stores = ic.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
+      const share = Number(ic.value ?? 0) / stores.length
+      for (const sn of stores) {
+        const prev = map.get(sn) ?? { spent: 0, inventories: 0 }
+        map.set(sn, { ...prev, spent: prev.spent + share })
+      }
+    }
     for (const t of tripsInPeriod) {
       if (!t.stores) continue
       const names = t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)
@@ -1022,7 +1031,7 @@ export default function AuditDashboardPage() {
       .map(([label, d]) => ({ label, ...d }))
       .sort((a, b) => b.inventories - a.inventories || b.spent - a.spent)
       .slice(0, 10)
-  }, [monthExpenses, tripsInPeriod])
+  }, [monthExpenses, monthInformativeCosts, tripsInPeriod])
 
   // Mapa storeName → gestao (para o card de custo por gestão)
   const storeGestaoMap = useMemo(() => {
@@ -1046,6 +1055,16 @@ export default function AuditDashboardPage() {
         map.set(gestao, { total: prev.total + share, inventories: prev.inventories, stores: new Set([...prev.stores, sn]) })
       }
     }
+    for (const ic of monthInformativeCosts) {
+      if (!ic.storeName) continue
+      const parts = ic.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
+      const share = Number(ic.value ?? 0) / parts.length
+      for (const sn of parts) {
+        const gestao = storeGestaoMap.get(sn) ?? 'Não informado'
+        const prev = map.get(gestao) ?? { total: 0, inventories: 0, stores: new Set() }
+        map.set(gestao, { total: prev.total + share, inventories: prev.inventories, stores: new Set([...prev.stores, sn]) })
+      }
+    }
     for (const t of tripsInPeriod) {
       if (!t.stores) continue
       for (const sn of t.stores.split(',').map((s: string) => s.trim()).filter(Boolean)) {
@@ -1058,7 +1077,7 @@ export default function AuditDashboardPage() {
       .map(([label, d]) => ({ label, total: d.total, inventories: d.inventories, storeCount: d.stores.size }))
       .filter(g => g.total > 0)
       .sort((a, b) => b.total - a.total)
-  }, [monthExpenses, tripsInPeriod, storeGestaoMap])
+  }, [monthExpenses, monthInformativeCosts, tripsInPeriod, storeGestaoMap])
 
   // ── Custo por mês (somente períodos selecionados no filtro) ──────────────────
   const byMonth = useMemo(() => {
@@ -1167,7 +1186,7 @@ export default function AuditDashboardPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '10px' }}>
           <KpiCard icon="🏦" label="Custo Total Operação"      value={formatCurrency(totalOperationCost)} color="#2563eb" />
-          <KpiCard icon="💰" label="Despesas de Viagem"        value={formatCurrency(totalMonthExpenses)} />
+          <KpiCard icon="💰" label="Despesas"        value={formatCurrency(totalMonthExpenses)} />
           <KpiCard icon="👤" label="Custo de Pessoal"          value={formatCurrency(totalPersonnelCost)} sub={`${personnelCostByCollab.length} colaborador(es)`} />
           <KpiCard icon="🏃" label="Time de Campo"             value={formatCurrency(totalCampoCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'campo').length} colab.`} />
           <KpiCard icon="🖥️" label="Administrativo"            value={formatCurrency(totalAdmCost)} sub={`${personnelCostByCollab.filter(c => c.tipoTime === 'administrativo').length} colab.`} />
@@ -1320,7 +1339,7 @@ export default function AuditDashboardPage() {
               <div style={{ display: 'flex', gap: '20px', marginTop: '8px', paddingLeft: `${PAD.left}px` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
                   <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#3b82f6" strokeWidth="2.5" /></svg>
-                  Despesas de Viagem
+                  Despesas
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
                   <svg width="20" height="4"><line x1="0" y1="2" x2="20" y2="2" stroke="#8b5cf6" strokeWidth="2.5" /></svg>

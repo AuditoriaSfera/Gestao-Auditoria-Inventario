@@ -7,6 +7,47 @@ import { logger } from '@/lib/logger'
 const JWT_SECRET = new TextEncoder().encode(process.env.AUTH_SECRET ?? 'fallback-secret')
 const TOKEN_EXPIRY = '8h'
 
+export async function signUp(name: string, email: string, password: string) {
+  const normalizedEmail = email.toLowerCase()
+
+  const existing = await db.user.findUnique({
+    where: { email: normalizedEmail },
+  })
+
+  if (existing) {
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message: 'Este e-mail já está registrado.',
+    })
+  }
+
+  const passwordHash = await hashPassword(password)
+
+  const user = await db.user.create({
+    data: {
+      name,
+      email: normalizedEmail,
+      passwordHash,
+      status: 'PENDING_ACTIVATION',
+    },
+  })
+
+  await db.auditLog.create({
+    data: {
+      userId: user.id,
+      action: 'USER_REGISTERED',
+      module: 'auth',
+      description: `Novo usuário registrado: ${name}`,
+      severity: 'INFO',
+    },
+  })
+
+  return {
+    success: true,
+    message: 'Cadastro realizado com sucesso! Aguardando ativação de e-mail.',
+  }
+}
+
 export async function signIn(email: string, password: string, ipAddress?: string) {
   const user = await db.user.findUnique({
     where: { email: email.toLowerCase(), deletedAt: null },

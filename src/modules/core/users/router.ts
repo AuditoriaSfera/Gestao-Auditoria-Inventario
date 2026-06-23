@@ -321,6 +321,43 @@ export const usersRouter = createTRPCRouter({
       return { success: true }
     }),
 
+  activatePendingUser: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const user = await ctx.db.user.findUniqueOrThrow({
+        where: { id: input.id },
+      })
+
+      if (user.status !== 'PENDING_ACTIVATION') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Este usuário não está pendente de ativação.',
+        })
+      }
+
+      await ctx.db.user.update({
+        where: { id: input.id },
+        data: {
+          status: 'ACTIVE',
+          emailVerified: new Date(),
+          updatedBy: ctx.session.user.id,
+        },
+      })
+
+      await ctx.db.auditLog.create({
+        data: {
+          userId: ctx.session.user.id,
+          action: 'USER_ACTIVATED',
+          module: 'users',
+          recordId: input.id,
+          description: `Usuário ativado: ${user.email}`,
+          severity: 'INFO',
+        },
+      })
+
+      return { success: true, message: 'Usuário ativado com sucesso!' }
+    }),
+
   cleanupTestData: protectedProcedure
     .mutation(async ({ ctx }) => {
       if (!ctx.session.user.roles.includes('platform-admin')) throw new TRPCError({ code: 'FORBIDDEN' })

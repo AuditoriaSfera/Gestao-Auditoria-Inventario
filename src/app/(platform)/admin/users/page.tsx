@@ -52,6 +52,7 @@ export default function UsersPage() {
 
   const utils = trpc.useUtils()
   const { data, isLoading } = trpc.users.list.useQuery({ page, pageSize: 20, search: search || undefined })
+  const { data: pendingData, isLoading: pendingLoading } = trpc.users.list.useQuery({ page: 1, pageSize: 100, status: 'PENDING_ACTIVATION' })
   const { data: rolesData } = trpc.users.listRoles.useQuery()
 
   const createMut = trpc.users.create.useMutation({
@@ -64,6 +65,9 @@ export default function UsersPage() {
   })
   const deleteMut = trpc.users.softDelete.useMutation({
     onSuccess: () => { utils.users.list.invalidate(); setConfirmDelete(null) },
+  })
+  const activateMut = trpc.users.activatePendingUser.useMutation({
+    onSuccess: () => { utils.users.list.invalidate() },
   })
 
   function openEdit(u: any) {
@@ -134,6 +138,9 @@ export default function UsersPage() {
     </>
   )
 
+  const pendingUsers = pendingData?.users ?? []
+  const hasPending = pendingUsers.length > 0
+
   return (
     <ModulePage
       title="Usuários"
@@ -167,6 +174,58 @@ export default function UsersPage() {
             </button>
           </div>
         </Modal>
+      )}
+
+      {hasPending && (
+        <DataCard
+          title={`E-mails Pendentes de Validação (${pendingUsers.length})`}
+          style={{ marginBottom: '24px', borderLeft: '4px solid #f59e0b' }}
+        >
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                  {['Usuário', 'E-mail', 'Registrado em', 'Ações'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '10px 12px', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pendingUsers.map((u: any) => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '13px', color: '#92400e' }}>
+                          {u.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                        </div>
+                        <span style={{ fontWeight: '500', color: '#0f172a' }}>{u.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px', color: '#64748b' }}>{u.email}</td>
+                    <td style={{ padding: '12px', color: '#64748b', fontSize: '13px' }}>{formatDateTime(u.createdAt)}</td>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          onClick={() => activateMut.mutate({ id: u.id })}
+                          disabled={activateMut.isPending}
+                          style={{ padding: '4px 12px', borderRadius: '6px', border: 'none', background: '#10b981', color: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
+                        >
+                          {activateMut.isPending ? 'Ativando...' : '✓ Validar'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete(u)}
+                          style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #fca5a5', background: '#fef2f2', fontSize: '12px', cursor: 'pointer', color: '#dc2626' }}
+                        >
+                          Rejeitar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </DataCard>
       )}
 
       <DataCard

@@ -1,11 +1,23 @@
 import { z } from 'zod'
 import { createTRPCRouter, publicProcedure, protectedProcedure } from '@/server/trpc/init'
 import { TRPCError } from '@trpc/server'
-import { signIn, changePassword, hashPassword } from './service'
+import { signIn, changePassword, hashPassword, signUp } from './service'
 import { sendPasswordResetEmail } from '@/lib/email'
 import crypto from 'crypto'
 
 export const authRouter = createTRPCRouter({
+  signUp: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(3, 'Nome deve ter ao menos 3 caracteres'),
+        email: z.string().email('E-mail inválido'),
+        password: z.string().min(8, 'Senha deve ter ao menos 8 caracteres'),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      return signUp(input.name, input.email, input.password)
+    }),
+
   signIn: publicProcedure
     .input(
       z.object({

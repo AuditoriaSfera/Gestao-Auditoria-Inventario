@@ -4,49 +4,61 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc'
-import { useAuthStore } from '@/lib/stores/auth'
 import { Eye, EyeOff, Loader2, ShieldCheck, BarChart3, Package } from 'lucide-react'
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter()
-  const { setToken } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [nameError, setNameError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [passwordError, setPasswordError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
 
-  const signIn = trpc.auth.signIn.useMutation({
+  const signUp = trpc.auth.signUp.useMutation({
     onSuccess: (data) => {
-      setToken(data.token)
-      document.cookie = `session-token=${data.token}; path=/; max-age=${8 * 3600}; SameSite=Strict`
-      router.push('/dashboard')
+      setSuccessMsg(data.message)
+      setTimeout(() => {
+        router.push('/login')
+      }, 2500)
     },
     onError: (error) => {
-      setErrorMsg(error.message || 'Erro ao entrar. Verifique suas credenciais.')
+      if (error.data?.code === 'CONFLICT') {
+        setEmailError(error.message)
+      } else {
+        setEmailError(error.message || 'Erro ao registrar. Tente novamente.')
+      }
     },
   })
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setNameError('')
     setEmailError('')
     setPasswordError('')
-    setErrorMsg('')
+    setSuccessMsg('')
     let valid = true
+
+    if (!name || name.length < 3) {
+      setNameError('Nome deve ter ao menos 3 caracteres')
+      valid = false
+    }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setEmailError('E-mail inválido')
       valid = false
     }
-    if (!password) {
-      setPasswordError('Senha obrigatória')
+    if (!password || password.length < 8) {
+      setPasswordError('Senha deve ter ao menos 8 caracteres')
       valid = false
     }
+
     if (!valid) return
-    signIn.mutate({ email, password })
+    signUp.mutate({ name, email, password })
   }
 
-  const isSubmitting = signIn.isPending
+  const isSubmitting = signUp.isPending
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: 'linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%)' }}>
@@ -122,15 +134,41 @@ export default function LoginPage() {
               fontSize: '28px', fontWeight: '800', color: 'white',
             }}>S</div>
             <h1 style={{ fontSize: '24px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px', letterSpacing: '-0.5px' }}>
-              Sfera Multifranquias
+              Criar Conta
             </h1>
             <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-              Plataforma de Auditoria e Gestão
+              Sfera Multifranquias
             </p>
           </div>
 
           {/* Formulário */}
-          <form onSubmit={onSubmit} autoComplete="new-password">
+          <form onSubmit={onSubmit} autoComplete="off">
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
+                Nome Completo
+              </label>
+              <input
+                type="text"
+                placeholder="Seu nome completo"
+                autoComplete="off"
+                value={name}
+                onChange={e => { setName(e.target.value); setNameError('') }}
+                style={{
+                  width: '100%', padding: '12px 16px',
+                  border: nameError ? '2px solid #ef4444' : '2px solid #e5e7eb',
+                  borderRadius: '10px', fontSize: '15px', outline: 'none',
+                  background: '#f9fafb', color: '#0f172a',
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={(e) => { e.target.style.borderColor = '#3b82f6'; e.target.style.background = 'white' }}
+                onBlur={(e) => { e.target.style.borderColor = nameError ? '#ef4444' : '#e5e7eb'; e.target.style.background = '#f9fafb' }}
+              />
+              {nameError && (
+                <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{nameError}</p>
+              )}
+            </div>
+
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px' }}>
                 E-mail
@@ -139,7 +177,7 @@ export default function LoginPage() {
                 type="text"
                 inputMode="email"
                 placeholder="seu@email.com.br"
-                autoComplete="new-password"
+                autoComplete="off"
                 value={email}
                 onChange={e => { setEmail(e.target.value); setEmailError('') }}
                 style={{
@@ -166,7 +204,7 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
-                  autoComplete="new-password"
+                  autoComplete="off"
                   value={password}
                   onChange={e => { setPassword(e.target.value); setPasswordError('') }}
                   style={{
@@ -195,15 +233,18 @@ export default function LoginPage() {
               {passwordError && (
                 <p style={{ fontSize: '12px', color: '#ef4444', marginTop: '4px' }}>{passwordError}</p>
               )}
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
+                Mínimo 8 caracteres
+              </p>
             </div>
 
-            {errorMsg && (
+            {successMsg && (
               <div style={{
-                background: '#fef2f2', border: '1px solid #fecaca',
+                background: '#f0fdf4', border: '1px solid #86efac',
                 borderRadius: '10px', padding: '12px 16px', marginBottom: '20px',
-                fontSize: '13px', color: '#dc2626',
+                fontSize: '13px', color: '#16a34a',
               }}>
-                {errorMsg}
+                ✓ {successMsg}
               </div>
             )}
 
@@ -225,9 +266,9 @@ export default function LoginPage() {
               {isSubmitting ? (
                 <>
                   <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                  Entrando...
+                  Criando conta...
                 </>
-              ) : 'Entrar na plataforma'}
+              ) : 'Criar Conta'}
             </button>
           </form>
 
@@ -251,20 +292,16 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <div style={{ textAlign: 'center', marginTop: '20px', display: 'flex', justifyContent: 'center', gap: '20px', fontSize: '13px' }}>
-            <Link
-              href="/forgot-password"
-              style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '500' }}
-            >
-              Esqueci minha senha
-            </Link>
-            <span style={{ color: '#e5e7eb' }}>•</span>
-            <Link
-              href="/register"
-              style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '600' }}
-            >
-              Criar conta
-            </Link>
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>
+              Já tem uma conta?{' '}
+              <Link
+                href="/login"
+                style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Entrar
+              </Link>
+            </span>
           </div>
         </div>
       </div>

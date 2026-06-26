@@ -270,8 +270,10 @@ function CollabMultiSelect({ collabs, selectedIds, onChange }: { collabs: any[];
 function LojasDoDiaSelect({ options, selected, onChange }: { options: StoreOption[]; selected: string[]; onChange: (v: string[]) => void }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState<DOMRect | null>(null)
+  const [search, setSearch] = useState('')
   const triggerRef = useRef<HTMLDivElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!open) return
@@ -282,6 +284,10 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: StoreOptio
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  useEffect(() => {
+    if (open) { setSearch(''); setTimeout(() => searchRef.current?.focus(), 50) }
   }, [open])
 
   function handleToggle() {
@@ -296,43 +302,63 @@ function LojasDoDiaSelect({ options, selected, onChange }: { options: StoreOptio
     : selected.length > 1 ? `${selected.length} lojas`
     : (options.find(o => o.name === selected[0])?.label ?? selected[0])
 
+  const filtered = search.trim()
+    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : options
+
   const spaceBelow = rect ? window.innerHeight - rect.bottom : 400
-  const openAbove = spaceBelow < 260
+  const openAbove = spaceBelow < 320
   const dropStyle: React.CSSProperties = rect ? {
     position: 'fixed',
     left: rect.left,
-    minWidth: Math.max(rect.width, 220),
+    minWidth: Math.max(rect.width, 240),
     zIndex: 99999,
     background: 'white',
     border: '1.5px solid #e2e8f0',
     borderRadius: '10px',
     boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
     ...(openAbove
-      ? { bottom: window.innerHeight - rect.top + 2, maxHeight: Math.min(rect.top - 16, 280) }
-      : { top: rect.bottom + 2, maxHeight: Math.min(spaceBelow - 16, 280) }),
+      ? { bottom: window.innerHeight - rect.top + 2, maxHeight: Math.min(rect.top - 16, 320) }
+      : { top: rect.bottom + 2, maxHeight: Math.min(spaceBelow - 16, 320) }),
   } : {}
 
   const dropdown = open && rect ? (
     <div ref={dropRef} style={dropStyle}>
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', position: 'sticky', top: 0, background: 'white', zIndex: 1 }}>
-        <button onClick={() => onChange(options.map(o => o.name))} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
-        <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+      <div style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, background: 'white', zIndex: 1, flexShrink: 0 }}>
+        <input
+          ref={searchRef}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar loja..."
+          style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '7px', padding: '6px 10px', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+          onClick={e => e.stopPropagation()}
+        />
       </div>
-      {options.map(opt => {
-        const isSel = selected.includes(opt.name)
-        return (
-          <div key={opt.name} onClick={() => toggle(opt.name)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
-            onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
-            onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
-            <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
+      <div style={{ padding: '6px 12px', borderBottom: '1px solid #f1f5f9', display: 'flex', gap: '12px', alignItems: 'center', flexShrink: 0 }}>
+        <button onClick={() => onChange(filtered.map(o => o.name))} style={{ fontSize: '12px', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Todas</button>
+        <button onClick={() => onChange([])} style={{ fontSize: '12px', color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }}>Limpar</button>
+        {selected.length > 0 && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: 'auto' }}>{selected.length} selecionada(s)</span>}
+      </div>
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: '16px', textAlign: 'center', fontSize: '13px', color: '#94a3b8' }}>Nenhuma loja encontrada</div>
+        ) : filtered.map(opt => {
+          const isSel = selected.includes(opt.name)
+          return (
+            <div key={opt.name} onClick={() => toggle(opt.name)} style={{ padding: '9px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', background: isSel ? '#eff6ff' : 'transparent' }}
+              onMouseEnter={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = '#f8fafc' }}
+              onMouseLeave={e => { if (!isSel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+              <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isSel ? '#2563eb' : '#d1d5db'}`, background: isSel ? '#2563eb' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {isSel && <span style={{ color: 'white', fontSize: '10px', lineHeight: 1 }}>✓</span>}
+              </div>
+              <span style={{ fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
             </div>
-            <span style={{ fontSize: '13px', color: '#0f172a' }}>{opt.label}</span>
-          </div>
-        )
-      })}
-      <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', textAlign: 'right', position: 'sticky', bottom: 0, background: 'white' }}>
+          )
+        })}
+      </div>
+      <div style={{ padding: '8px 12px', borderTop: '1px solid #f1f5f9', textAlign: 'right', flexShrink: 0 }}>
         <button onClick={() => setOpen(false)} style={{ fontSize: '12px', fontWeight: '600', color: 'white', background: '#2563eb', border: 'none', borderRadius: '6px', padding: '6px 16px', cursor: 'pointer' }}>Confirmar</button>
       </div>
     </div>
@@ -471,12 +497,13 @@ function syncRows(prev: Record<string, DayRow>, newDates: string[]): Record<stri
   return result
 }
 
-function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes }: {
+function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes, expenseCategories }: {
   onClose: () => void
   onCreated?: () => void
   collabsList: any[]
   storesList: any[]
   costTypes: any[]
+  expenseCategories: any[]
 }) {
   const utils = trpc.useUtils()
   const today = new Date().toISOString().slice(0, 10)
@@ -486,6 +513,7 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
   const [endDate, setEndDate] = useState(today)
   const [reason, setReason] = useState('')
   const [observations, setObservations] = useState('')
+  const [selectedCategorias, setSelectedCategorias] = useState<string[]>([])
   const [collabEntries, setCollabEntries] = useState<CollabEntry[]>([])
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [error, setError] = useState('')
@@ -549,6 +577,7 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
           releasedAmount: totalAllowance,
           advancedAmount: entry.advancedAmount ? parseMoney(entry.advancedAmount) : 0,
           observations: observations || undefined,
+          categorias: selectedCategorias.length ? selectedCategorias.join(', ') : undefined,
         })
         for (const d of dates) {
           const row = entry.rows[d]
@@ -581,11 +610,11 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
   }
 
   return (
-    <Modal title="Nova Viagem" onClose={onClose} wide>
+    <Modal title="Nova Despesa" onClose={onClose} wide>
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
 
       {/* ── Lojas ── */}
-      <SectionTitle>1. Lojas da Viagem</SectionTitle>
+      <SectionTitle>1. Lojas da Despesa</SectionTitle>
       <Field label="Lojas *" hint="As cidades e estados serão preenchidos automaticamente">
         <StoreMultiSelect stores={storesList} selectedIds={selectedStoreIds} onChange={ids => { setSelectedStoreIds(ids) }} />
       </Field>
@@ -607,9 +636,24 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
           <input style={inp} type="date" value={endDate} onChange={e => { setEndDate(e.target.value); updateDates(startDate, e.target.value) }} />
         </Field>
       </div>
-      <Field label="Motivo da Viagem">
+      <Field label="Motivo da Despesa">
         <input style={inp} value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: Inventário mensal, Auditoria regional..." />
       </Field>
+      {expenseCategories.length > 0 && (
+        <Field label="Tipo de Despesa" hint="Selecione uma ou mais categorias">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '8px 0' }}>
+            {expenseCategories.map((cat: any) => {
+              const checked = selectedCategorias.includes(cat.name)
+              return (
+                <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', padding: '5px 12px', borderRadius: '20px', border: `1.5px solid ${checked ? '#2563eb' : '#e2e8f0'}`, background: checked ? '#eff6ff' : 'white', color: checked ? '#1d4ed8' : '#374151', fontWeight: checked ? '600' : '400', userSelect: 'none' }}>
+                  <input type="checkbox" checked={checked} onChange={e => setSelectedCategorias(prev => e.target.checked ? [...prev, cat.name] : prev.filter(c => c !== cat.name))} style={{ display: 'none' }} />
+                  {cat.name}
+                </label>
+              )
+            })}
+          </div>
+        </Field>
+      )}
       <Field label="Observações">
         <textarea style={{ ...inp, minHeight: '56px', resize: 'vertical' }} value={observations} onChange={e => setObservations(e.target.value)} />
       </Field>
@@ -676,7 +720,7 @@ function NovaTripModal({ onClose, onCreated, collabsList, storesList, costTypes 
 
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
         <Btn variant="outline" onClick={onClose}>Cancelar</Btn>
-        <Btn onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar Viagem'}</Btn>
+        <Btn onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar Despesa'}</Btn>
       </div>
     </Modal>
   )
@@ -914,7 +958,7 @@ function TabelaVerificacao({ trip, storesList }: { trip: any; storesList: any[] 
         </thead>
         <tbody>
           {datas.length === 0 && (
-            <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Nenhuma solicitação registrada nesta viagem.</td></tr>
+            <tr><td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>Nenhuma solicitação registrada nesta despesa.</td></tr>
           )}
           {datas.flatMap(d => {
             const dayOrig   = byDateOrig[d] ?? []
@@ -1404,7 +1448,7 @@ function PrestacaoModal({ trip, onClose }: { trip: any; onClose: () => void }) {
 
         {/* ── Ações conforme status */}
         {isClosed ? (
-          <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px', textAlign: 'center' }}>✓ Viagem concluída e validada pelo financeiro.</div>
+          <div style={{ color: '#166534', fontWeight: '700', fontSize: '15px', textAlign: 'center' }}>✓ Despesa concluída e validada pelo financeiro.</div>
         ) : isSubmitted ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
@@ -1552,6 +1596,7 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
   })
   const { data: collabs } = trpc.auditCollaborators.list.useQuery()
   const { data: costTypes } = trpc.auditCostTypes.list.useQuery()
+  const { data: expenseCategories } = trpc.auditExpenseCategories.list.useQuery()
   const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
   const storesList = storesData?.stores ?? []
 
@@ -1571,11 +1616,12 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
           collabsList={collabs ?? []}
           storesList={storesList}
           costTypes={costTypes ?? []}
+          expenseCategories={expenseCategories ?? []}
         />
       )}
       {deleteTripId && (
         <Modal title="Confirmar Exclusão" onClose={() => setDeleteTripId(null)}>
-          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta viagem e todas as despesas?</div>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta despesa e todos os registros?</div>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <Btn variant="outline" onClick={() => setDeleteTripId(null)}>Cancelar</Btn>
             <Btn variant="danger" onClick={() => deleteTripMut.mutate({ id: deleteTripId })} disabled={deleteTripMut.isPending}>Excluir</Btn>
@@ -1625,12 +1671,12 @@ function AbaViagens({ onGoEmAndamento }: { onGoEmAndamento: () => void }) {
             ✕ Limpar
           </button>
         )}
-        <Btn onClick={() => setShowNew(true)}>+ Nova Viagem (Adiantamento)</Btn>
+        <Btn onClick={() => setShowNew(true)}>+ Nova Despesa</Btn>
       </div>
 
-      <DataCard title={`Viagens (${trips.length})`}>
+      <DataCard title={`Despesas (${trips.length})`}>
         {isLoading ? <LoadingState /> : !trips.length ? (
-          <EmptyState icon="✈️" title="Nenhuma viagem cadastrada" description='Clique em "+ Nova Viagem" para criar a primeira viagem.' />
+          <EmptyState icon="💰" title="Nenhuma despesa cadastrada" description='Clique em "+ Nova Despesa" para criar a primeira despesa.' />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1964,7 +2010,10 @@ function AbaEmAndamento() {
   const [filterCreatedTo, setFilterCreatedTo] = useState('')
   const [filterStatus, setFilterStatus] = useState<'' | 'OPEN' | 'SUBMITTED' | 'REJECTED'>('')
   const [editTripId, setEditTripId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ reason: '', observations: '', status: 'OPEN' })
+  const [editTripIds, setEditTripIds] = useState<string[]>([])
+  const [editTrip, setEditTrip] = useState<any | null>(null)
+  const [editForm, setEditForm] = useState({ reason: '', observations: '', status: 'OPEN', stores: '', city: '', startDate: '', endDate: '' })
+  const [editStoreIds, setEditStoreIds] = useState<string[]>([])
   const [showExpense, setShowExpense] = useState(false)
   const [expenseTripId, setExpenseTripId] = useState<string | null>(null)
   const [expForm, setExpForm] = useState({ collaboratorId: '', type: '', paymentMethod: 'Adiantamento', date: new Date().toISOString().slice(0,10), value: '', storeName: '', cityUf: '', description: '', observations: '' })
@@ -2002,7 +2051,7 @@ function AbaEmAndamento() {
     generateTripPDF(pdfTripDetail, storesList)
   }, [pdfTripDetail])
 
-  const updateTripMut = trpc.auditTrips.update.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setEditTripId(null); setError('') }, onError: e => setError(e.message) })
+  const updateTripMut = trpc.auditTrips.update.useMutation({ onError: e => setError(e.message) })
   const deleteTripMut = trpc.auditTrips.delete.useMutation({ onSuccess: () => { utils.auditTrips.list.invalidate(); setDeleteTripId(null) } })
   const createExpMut = trpc.auditCost.createExpense.useMutation({
     onSuccess: () => { utils.auditTrips.list.invalidate(); if (prestacaoTripId) utils.auditTrips.getById.invalidate({ id: prestacaoTripId }); setShowExpense(false); setError('') },
@@ -2025,25 +2074,69 @@ function AbaEmAndamento() {
 
   return (
     <>
-      {/* Modal Editar Viagem (simplificado) */}
-      {editTripId && (
-        <Modal title="Editar Viagem" onClose={() => { setEditTripId(null); setError('') }}>
-          {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
-          <Field label="Motivo da Viagem"><input style={inp} value={editForm.reason} onChange={e => setEditForm(f => ({ ...f, reason: e.target.value }))} /></Field>
-          <Field label="Status">
-            <select style={inp} value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
-              <option value="OPEN">Aberta</option>
-              <option value="CLOSED">Fechada</option>
-              <option value="CANCELLED">Cancelada</option>
-            </select>
-          </Field>
-          <Field label="Observações"><textarea style={{ ...inp, minHeight: '60px', resize: 'vertical' }} value={editForm.observations} onChange={e => setEditForm(f => ({ ...f, observations: e.target.value }))} /></Field>
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-            <Btn variant="outline" onClick={() => { setEditTripId(null); setError('') }}>Cancelar</Btn>
-            <Btn onClick={() => updateTripMut.mutate({ id: editTripId, reason: editForm.reason || undefined, status: editForm.status, observations: editForm.observations || undefined })} disabled={updateTripMut.isPending}>{updateTripMut.isPending ? 'Salvando...' : 'Salvar'}</Btn>
-          </div>
-        </Modal>
-      )}
+      {/* Modal Editar Viagem */}
+      {editTripId && (() => {
+        const editSelectedStores = editStoreIds.map(id => storesList.find((s: any) => s.id === id)).filter(Boolean) as any[]
+        const editCities = [...new Set(editSelectedStores.filter((s: any) => s.city).map((s: any) => `${s.city}/${s.state}`))] as string[]
+        function closeEdit() { setEditTripId(null); setEditTripIds([]); setEditTrip(null); setEditStoreIds([]); setError('') }
+        async function saveEdit() {
+          const storesStr = editStoreIds.length
+            ? editStoreIds.map((id: string) => { const s = storesList.find((x: any) => x.id === id); return s ? (s.tradeName || s.name) : '' }).filter(Boolean).join(', ')
+            : undefined
+          const cityStr = editCities.length ? editCities.map((c: string) => c.split('/')[0]).join(', ') : editForm.city || undefined
+          const stateStr = editCities.length ? [...new Set(editCities.map((c: string) => c.split('/')[1]).filter(Boolean))].join(', ') : undefined
+          const payload = {
+            reason: editForm.reason || undefined,
+            stores: storesStr,
+            city: cityStr,
+            state: stateStr,
+            startDate: editForm.startDate ? new Date(editForm.startDate + 'T12:00:00') : undefined,
+            endDate: editForm.endDate ? new Date(editForm.endDate + 'T12:00:00') : undefined,
+          }
+          try {
+            const ids = editTripIds.length > 0 ? editTripIds : [editTripId]
+            for (const tid of ids) {
+              await updateTripMut.mutateAsync({ id: tid, ...payload })
+            }
+            utils.auditTrips.list.invalidate()
+            closeEdit()
+          } catch {}
+        }
+        return (
+          <Modal title="Editar Despesa" onClose={closeEdit}>
+            {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
+            {editTripIds.length > 1 && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '8px 12px', marginBottom: '14px', fontSize: '12px', color: '#1e40af' }}>
+                As alterações serão aplicadas a todos os {editTripIds.length} colaboradores desta viagem.
+              </div>
+            )}
+            <Field label="Lojas" hint="As cidades serão atualizadas automaticamente">
+              <StoreMultiSelect stores={storesList} selectedIds={editStoreIds} onChange={setEditStoreIds} />
+            </Field>
+            {editCities.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                {editCities.map((loc: string) => (
+                  <span key={loc} style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '20px', padding: '3px 12px', fontSize: '12px', fontWeight: '600', color: '#166534' }}>📍 {loc}</span>
+                ))}
+              </div>
+            )}
+            {editCities.length === 0 && editForm.city && (
+              <Field label="Cidade">
+                <input style={inp} value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
+              </Field>
+            )}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <Field label="Data de Início" row><input style={inp} type="date" value={editForm.startDate} onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} /></Field>
+              <Field label="Data de Fim" row><input style={inp} type="date" value={editForm.endDate} onChange={e => setEditForm(f => ({ ...f, endDate: e.target.value }))} /></Field>
+            </div>
+            <Field label="Motivo da Despesa"><input style={inp} value={editForm.reason} onChange={e => setEditForm(f => ({ ...f, reason: e.target.value }))} /></Field>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <Btn variant="outline" onClick={closeEdit}>Cancelar</Btn>
+              <Btn onClick={saveEdit} disabled={updateTripMut.isPending}>{updateTripMut.isPending ? 'Salvando...' : 'Salvar'}</Btn>
+            </div>
+          </Modal>
+        )
+      })()}
 
       {/* Modal Despesa Avulsa */}
       {showExpense && (
@@ -2094,7 +2187,7 @@ function AbaEmAndamento() {
       {/* Modal Exclusão */}
       {deleteTripId && (
         <Modal title="Confirmar Exclusão" onClose={() => setDeleteTripId(null)}>
-          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta viagem e todas as despesas?</div>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta despesa e todos os registros?</div>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <Btn variant="outline" onClick={() => setDeleteTripId(null)}>Cancelar</Btn>
             <Btn variant="danger" onClick={() => deleteTripMut.mutate({ id: deleteTripId })} disabled={deleteTripMut.isPending}>Excluir</Btn>
@@ -2153,9 +2246,9 @@ function AbaEmAndamento() {
         </div>
       </div>
 
-      <DataCard title={`Viagens (${groups.length})`}>
+      <DataCard title={`Despesas (${groups.length})`}>
         {isLoading ? <LoadingState /> : !trips.length ? (
-          <EmptyState icon="✈️" title="Nenhuma viagem" description='Clique em "+ Nova Viagem" para cadastrar.' />
+          <EmptyState icon="💰" title="Nenhuma despesa" description='Clique em "+ Nova Despesa" para cadastrar.' />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {groups.map((g: any) => {
@@ -2173,9 +2266,9 @@ function AbaEmAndamento() {
               return (
                 <div key={g.key} style={{ border: `2px solid ${groupBorder}`, borderRadius: '14px', overflow: 'hidden', background: groupBg }}>
                   {/* ── Cabeçalho: cidade + período ── */}
-                  <div style={{ padding: '16px', cursor: 'pointer' }} onClick={() => setExpandedGroup(isOpen ? null : g.key)}>
+                  <div style={{ padding: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                      <div style={{ flex: 1, minWidth: '160px' }}>
+                      <div style={{ flex: 1, minWidth: '160px', cursor: 'pointer' }} onClick={() => setExpandedGroup(isOpen ? null : g.key)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '17px' }}>📍</span>
                           <span style={{ fontWeight: '800', fontSize: '16px', color: '#0f172a' }}>{cityTitle || 'Viagem'}</span>
@@ -2204,7 +2297,29 @@ function AbaEmAndamento() {
                           <div style={{ fontSize: '11px', color: '#64748b' }}>colaborador{g.trips.length !== 1 ? 'es' : ''}</div>
                         </div>
                       </div>
-                      <span style={{ fontSize: '14px', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button onClick={e => {
+                          e.stopPropagation()
+                          const t0 = g.trips[0]
+                          const storeNames = t0?.stores ? t0.stores.split(', ').map((n: string) => n.trim()) : []
+                          const ids = storesList.filter((s: any) => storeNames.includes(s.tradeName || s.name)).map((s: any) => s.id)
+                          setEditTripId(t0?.id ?? g.trips[0].id)
+                          setEditTripIds(g.trips.map((t: any) => t.id))
+                          setEditTrip(t0)
+                          setEditStoreIds(ids)
+                          setEditForm({
+                            reason: t0?.reason ?? '',
+                            observations: t0?.observations ?? '',
+                            status: t0?.status ?? 'OPEN',
+                            stores: t0?.stores ?? '',
+                            city: t0?.city ?? '',
+                            startDate: t0?.startDate ? new Date(t0.startDate).toISOString().slice(0, 10) : '',
+                            endDate: t0?.endDate ? new Date(t0.endDate).toISOString().slice(0, 10) : '',
+                          })
+                          setError('')
+                        }} style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #d1d5db', background: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600', color: '#374151' }}>✏️ Editar</button>
+                        <span style={{ fontSize: '14px', color: '#94a3b8', cursor: 'pointer', padding: '4px 6px' }} onClick={() => setExpandedGroup(isOpen ? null : g.key)}>{isOpen ? '▲' : '▼'}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -2333,7 +2448,7 @@ function AbaConcluidas() {
       {prestacaoTripId && prestacaoDetail && <PrestacaoModal trip={prestacaoDetail} onClose={() => setPrestacaoTripId(null)} />}
       {deleteTripId && (
         <Modal title="Confirmar Exclusão" onClose={() => setDeleteTripId(null)}>
-          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta viagem e todas as despesas?</div>
+          <div style={{ padding: '8px 0 24px', fontSize: '15px', color: '#374151' }}>Excluir esta despesa e todos os registros?</div>
           <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
             <Btn variant="outline" onClick={() => setDeleteTripId(null)}>Cancelar</Btn>
             <Btn variant="danger" onClick={() => deleteTripMut.mutate({ id: deleteTripId })} disabled={deleteTripMut.isPending}>Excluir</Btn>
@@ -2381,7 +2496,7 @@ function AbaConcluidas() {
 
       <DataCard title={`Viagens Concluídas (${trips.length})`}>
         {isLoading ? <LoadingState /> : !trips.length ? (
-          <EmptyState icon="✅" title="Nenhuma viagem concluída" description="As viagens validadas pelo financeiro aparecem aqui." />
+          <EmptyState icon="✅" title="Nenhuma despesa concluída" description="As despesas validadas pelo financeiro aparecem aqui." />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {trips.map((t: any) => (
@@ -2433,7 +2548,7 @@ function AbaConcluidas() {
 }
 
 // ─── Modal Novo/Editar Custo Informativo ──────────────────────────────────────
-function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList, itemId, initialData }: {
+function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes, storesList, itemId, initialData, expenseCategories }: {
   onClose: () => void
   onCreated?: () => void
   collabsList: any[]
@@ -2441,6 +2556,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   storesList: any[]
   itemId?: string
   initialData?: any
+  expenseCategories?: any[]
 }) {
   const utils = trpc.useUtils()
   const today = new Date().toISOString().slice(0, 10)
@@ -2459,6 +2575,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   })()
   const initStoreNames: string[] = initialData?.storeName ? initialData.storeName.split(',').map((s: string) => s.trim()).filter(Boolean) : []
   const initAttachments: string[] = (() => { try { return initialData?.attachmentUrls ? JSON.parse(initialData.attachmentUrls) : [] } catch { return [] } })()
+  const initCategorias: string[] = initialData?.categorias ? initialData.categorias.split(',').map((s: string) => s.trim()).filter(Boolean) : []
 
   const [form, setForm] = useState({
     costCenterName: initialData?.costCenterName ?? '',
@@ -2469,6 +2586,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   })
   const [selectedCollabIds, setSelectedCollabIds] = useState<string[]>(initCollabIds)
   const [selectedStoreNames, setSelectedStoreNames] = useState<string[]>(initStoreNames)
+  const [selectedCategorias, setSelectedCategorias] = useState<string[]>(initCategorias)
   const [attachments, setAttachments] = useState<string[]>(initAttachments)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -2498,6 +2616,11 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
     if (!form.costCenterName) { setError('Selecione o centro de custo.'); return }
     if (!form.date) { setError('Informe a data.'); return }
     if (!form.value || isNaN(Number(form.value.replace(',', '.')))) { setError('Informe o valor.'); return }
+    if (!selectedCollabIds.length) { setError('Selecione ao menos um colaborador.'); return }
+    if (!selectedStoreNames.length) { setError('Selecione ao menos uma loja.'); return }
+    if (!form.reason?.trim()) { setError('Informe o motivo do custo.'); return }
+    if (expenseCategories.length > 0 && !selectedCategorias.length) { setError('Selecione ao menos um tipo de despesa.'); return }
+    if (!form.paymentMethod?.trim()) { setError('Informe a forma de pagamento.'); return }
     if (!itemId && !attachments.length) { setError('Adicione ao menos um comprovante.'); return }
     setError('')
     setSaving(true)
@@ -2514,6 +2637,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
           value:           Number(form.value.replace(',', '.')),
           paymentMethod:   form.paymentMethod || null,
           attachmentUrls:  attachments,
+          categorias:      selectedCategorias.length ? selectedCategorias.join(', ') : null,
         })
       } else {
         await createMut.mutateAsync({
@@ -2526,6 +2650,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
           value:           Number(form.value.replace(',', '.')),
           paymentMethod:   form.paymentMethod || undefined,
           attachmentUrls:  attachments.length ? attachments : undefined,
+          categorias:      selectedCategorias.length ? selectedCategorias.join(', ') : undefined,
         })
       }
       utils.auditInformativeCosts.list.invalidate()
@@ -2587,6 +2712,22 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
       <Field label="Motivo">
         <textarea style={{ ...inp, minHeight: '60px', resize: 'vertical' }} value={form.reason} onChange={e => set('reason', e.target.value)} placeholder="Descreva o motivo do custo..." />
       </Field>
+
+      {expenseCategories && expenseCategories.length > 0 && (
+        <Field label="Tipo de Despesa" hint="Selecione uma ou mais categorias">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '8px 0' }}>
+            {expenseCategories.map((cat: any) => {
+              const checked = selectedCategorias.includes(cat.name)
+              return (
+                <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', padding: '5px 12px', borderRadius: '20px', border: `1.5px solid ${checked ? '#2563eb' : '#e2e8f0'}`, background: checked ? '#eff6ff' : 'white', color: checked ? '#1d4ed8' : '#374151', fontWeight: checked ? '600' : '400', userSelect: 'none' }}>
+                  <input type="checkbox" checked={checked} onChange={e => setSelectedCategorias(prev => e.target.checked ? [...prev, cat.name] : prev.filter(c => c !== cat.name))} style={{ display: 'none' }} />
+                  {cat.name}
+                </label>
+              )
+            })}
+          </div>
+        </Field>
+      )}
 
       <Field label="Forma de Pagamento">
         <input style={inp} value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} placeholder="Ex: Pix, Cartão, Dinheiro..." />
@@ -2654,6 +2795,9 @@ function AbaInformativos() {
   const [filterSearch, setFilterSearch] = useState('')
   const [filterFrom, setFilterFrom] = useState('')
   const [filterTo, setFilterTo] = useState('')
+  const [filterCollab, setFilterCollab] = useState('')
+  const [filterCostCenter, setFilterCostCenter] = useState('')
+  const [filterCategoria, setFilterCategoria] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [editItem, setEditItem] = useState<any | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -2661,20 +2805,25 @@ function AbaInformativos() {
   const { data, isLoading } = trpc.auditInformativeCosts.list.useQuery({
     page, pageSize: 20,
     search: filterSearch || undefined,
+    collaboratorId: filterCollab || undefined,
+    costCenterName: filterCostCenter || undefined,
+    categoria: filterCategoria || undefined,
     startDate: filterFrom ? new Date(filterFrom) : undefined,
     endDate: filterTo ? new Date(filterTo + 'T23:59:59') : undefined,
   })
-  const { data: collabs }    = trpc.auditCollaborators.list.useQuery()
-  const { data: costTypes }  = trpc.auditCostTypes.list.useQuery()
-  const { data: storesData } = trpc.stores.list.useQuery({ pageSize: 200 })
+  const { data: collabs }           = trpc.auditCollaborators.list.useQuery()
+  const { data: costTypes }         = trpc.auditCostTypes.list.useQuery()
+  const { data: expenseCategories } = trpc.auditExpenseCategories.list.useQuery()
+  const { data: storesData }        = trpc.stores.list.useQuery({ pageSize: 200 })
   const storesList = storesData?.stores ?? []
+  const tiposDisponiveis = costTypes && costTypes.length > 0 ? costTypes.map((t: any) => t.name) : DEFAULT_COST_TYPES
 
   const deleteMut = trpc.auditInformativeCosts.delete.useMutation({
     onSuccess: () => { utils.auditInformativeCosts.list.invalidate(); setDeleteId(null) },
   })
 
   const items = data?.items ?? []
-  const hasFilters = filterSearch || filterFrom || filterTo
+  const hasFilters = filterSearch || filterFrom || filterTo || filterCollab || filterCostCenter || filterCategoria
 
   const thSt: React.CSSProperties = { padding: '9px 14px', fontSize: '11px', fontWeight: '700', color: '#64748b', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textAlign: 'left', whiteSpace: 'nowrap' }
   const tdSt: React.CSSProperties = { padding: '11px 14px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle', fontSize: '13px' }
@@ -2688,6 +2837,7 @@ function AbaInformativos() {
           collabsList={collabs ?? []}
           costTypes={costTypes ?? []}
           storesList={storesList}
+          expenseCategories={expenseCategories ?? []}
         />
       )}
       {editItem && (
@@ -2699,6 +2849,7 @@ function AbaInformativos() {
           storesList={storesList}
           itemId={editItem.id}
           initialData={editItem}
+          expenseCategories={expenseCategories ?? []}
         />
       )}
       {deleteId && (
@@ -2711,16 +2862,37 @@ function AbaInformativos() {
         </Modal>
       )}
 
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: '16px' }}>
         <div style={{ background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '14px 16px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', flex: 1 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 180px', minWidth: '160px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
             <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pesquisar</label>
             <input
-              placeholder="Colaborador, loja, motivo..."
+              placeholder="Loja, motivo..."
               value={filterSearch}
               onChange={e => { setFilterSearch(e.target.value); setPage(1) }}
               style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
             />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 150px', minWidth: '130px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colaborador</label>
+            <select value={filterCollab} onChange={e => { setFilterCollab(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }}>
+              <option value="">Todos</option>
+              {(collabs ?? []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Centro de Custo</label>
+            <select value={filterCostCenter} onChange={e => { setFilterCostCenter(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }}>
+              <option value="">Todos</option>
+              {tiposDisponiveis.map((t: string) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 160px', minWidth: '140px' }}>
+            <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tipo de Despesa</label>
+            <select value={filterCategoria} onChange={e => { setFilterCategoria(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }}>
+              <option value="">Todos</option>
+              {(expenseCategories ?? []).map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>De</label>
@@ -2731,7 +2903,7 @@ function AbaInformativos() {
             <input type="date" value={filterTo} onChange={e => { setFilterTo(e.target.value); setPage(1) }} style={{ padding: '8px 10px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px' }} />
           </div>
           {!!hasFilters && (
-            <button onClick={() => { setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setPage(1) }}
+            <button onClick={() => { setFilterSearch(''); setFilterFrom(''); setFilterTo(''); setFilterCollab(''); setFilterCostCenter(''); setFilterCategoria(''); setPage(1) }}
               style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}>
               ✕ Limpar
             </button>
@@ -2753,6 +2925,7 @@ function AbaInformativos() {
                   <th style={thSt}>Colaborador</th>
                   <th style={thSt}>Loja</th>
                   <th style={thSt}>Motivo</th>
+                  <th style={thSt}>Tipo de Despesa</th>
                   <th style={thSt}>Pagamento</th>
                   <th style={{ ...thSt, textAlign: 'right' }}>Valor</th>
                   <th style={thSt}>Comprovantes</th>
@@ -2773,30 +2946,23 @@ function AbaInformativos() {
                     <td style={{ ...tdSt, maxWidth: '200px' }}>
                       {(() => {
                         const ids: string[] = (() => { try { return item.collaboratorIds ? JSON.parse(item.collaboratorIds) : [] } catch { return [] } })()
-                        if (ids.length > 1) {
-                          return (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
-                              {ids.map((id: string) => {
-                                const c = (collabs as any[])?.find((x: any) => x.id === id)
-                                return <span key={id} style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 7px', borderRadius: '10px', fontWeight: '600', whiteSpace: 'nowrap' }}>{c?.name ?? '—'}</span>
-                              })}
-                            </div>
-                          )
-                        }
-                        if (item.collaborator) return (
-                          <div>
-                            <div style={{ fontWeight: '600', color: '#0f172a', fontSize: '13px' }}>{item.collaborator.name}</div>
-                            {item.collaborator.role && <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.collaborator.role}</div>}
+                        const collabNames: string[] = ids.length
+                          ? ids.map((id: string) => { const c = (collabs as any[])?.find((x: any) => x.id === id); return c?.name ?? '—' })
+                          : item.collaborator ? [item.collaborator.name] : []
+                        if (!collabNames.length) return <span style={{ color: '#94a3b8' }}>—</span>
+                        return (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                            {collabNames.map((name: string, i: number) => (
+                              <span key={i} style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 7px', borderRadius: '10px', fontWeight: '600', whiteSpace: 'nowrap' }}>{name}</span>
+                            ))}
                           </div>
                         )
-                        return <span style={{ color: '#94a3b8' }}>—</span>
                       })()}
                     </td>
                     <td style={{ ...tdSt, maxWidth: '200px' }}>
                       {(() => {
                         if (!item.storeName) return <span style={{ color: '#94a3b8' }}>—</span>
                         const names = item.storeName.split(',').map((s: string) => s.trim()).filter(Boolean)
-                        if (names.length <= 1) return <span style={{ color: '#374151', fontSize: '13px' }}>{item.storeName}</span>
                         return (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
                             {names.map((name: string, i: number) => (
@@ -2808,6 +2974,17 @@ function AbaInformativos() {
                     </td>
                     <td style={{ ...tdSt, color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.reason || <span style={{ color: '#94a3b8' }}>—</span>}
+                    </td>
+                    <td style={{ ...tdSt, maxWidth: '180px' }}>
+                      {item.categorias ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                          {item.categorias.split(',').map((cat: string, i: number) => (
+                            <span key={i} style={{ fontSize: '11px', background: '#fef3c7', color: '#92400e', padding: '2px 7px', borderRadius: '10px', fontWeight: '600', border: '1px solid #fde68a', whiteSpace: 'nowrap' }}>
+                              {cat.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : <span style={{ color: '#94a3b8' }}>—</span>}
                     </td>
                     <td style={{ ...tdSt, color: '#64748b' }}>{item.paymentMethod || <span style={{ color: '#94a3b8' }}>—</span>}</td>
                     <td style={{ ...tdSt, textAlign: 'right', fontWeight: '700', color: '#0f172a' }}>{formatCurrency(Number(item.value))}</td>
@@ -2866,28 +3043,135 @@ function AbaInformativos() {
   )
 }
 
+// ─── Aba: Tipos de Despesa ────────────────────────────────────────────────────
+function AbaTiposDespesa() {
+  const utils = trpc.useUtils()
+  const [name, setName] = useState('')
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [error, setError] = useState('')
+  const [migrMsg, setMigrMsg] = useState('')
+
+  const { data: categorias = [], isLoading } = trpc.auditExpenseCategories.list.useQuery({ includeInactive: true })
+
+  const createMut = trpc.auditExpenseCategories.create.useMutation({
+    onSuccess: () => { utils.auditExpenseCategories.list.invalidate(); setName(''); setError('') },
+    onError: (e: any) => setError(e.message),
+  })
+  const updateMut = trpc.auditExpenseCategories.update.useMutation({
+    onSuccess: () => { utils.auditExpenseCategories.list.invalidate(); setEditId(null); setEditName(''); setError('') },
+    onError: (e: any) => setError(e.message),
+  })
+  const toggleMut = trpc.auditExpenseCategories.update.useMutation({
+    onSuccess: () => utils.auditExpenseCategories.list.invalidate(),
+  })
+  const deleteMut = trpc.auditExpenseCategories.delete.useMutation({
+    onSuccess: () => utils.auditExpenseCategories.list.invalidate(),
+  })
+  const applyMut = trpc.auditExpenseCategories.applyToExisting.useMutation({
+    onSuccess: (r: any) => {
+      utils.auditExpenseCategories.list.invalidate()
+      setMigrMsg(`✓ ${r.tripsAtualizadas} despesa(s) e ${r.custosAtualizados} custo(s) informativo(s) marcados como "Viagem".`)
+    },
+    onError: (e: any) => setMigrMsg(`Erro: ${e.message}`),
+  })
+
+  return (
+    <div style={{ maxWidth: '640px' }}>
+      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '13px', color: '#1e40af' }}>
+        <strong>Como usar:</strong> As categorias aqui cadastradas aparecem como opções no campo "Tipo de Despesa" ao criar viagens e custos informativos. No dashboard você pode filtrar e comparar despesas por categoria.
+      </div>
+
+      {/* Migração de dados existentes */}
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
+        <div style={{ fontWeight: '700', fontSize: '13px', color: '#92400e', marginBottom: '6px' }}>⚡ Migração de Despesas Existentes</div>
+        <div style={{ fontSize: '13px', color: '#78350f', marginBottom: '10px' }}>
+          Cria a categoria "Viagem" e aplica automaticamente a todas as despesas e custos informativos que ainda não possuem tipo definido.
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <Btn onClick={() => { if (confirm('Criar categoria "Viagem" e aplicar a todas as despesas sem tipo?')) applyMut.mutate({ categoria: 'Viagem' }) }} disabled={applyMut.isPending}>
+            {applyMut.isPending ? 'Aplicando...' : '🚀 Aplicar "Viagem" às despesas existentes'}
+          </Btn>
+          {migrMsg && <span style={{ fontSize: '13px', color: '#166534', fontWeight: '600' }}>{migrMsg}</span>}
+        </div>
+      </div>
+
+      {/* Adicionar nova */}
+      <DataCard title="Nova Categoria" action={null}>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            style={{ ...inp, flex: 1 }}
+            placeholder="Ex: Inventário, Transferência, Logística..."
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && createMut.mutate({ name: name.trim() })}
+          />
+          <Btn onClick={() => { if (!name.trim()) { setError('Informe o nome.'); return } createMut.mutate({ name: name.trim() }) }} disabled={createMut.isPending}>
+            {createMut.isPending ? 'Salvando...' : '+ Adicionar'}
+          </Btn>
+        </div>
+        {error && <div style={{ marginTop: '8px', fontSize: '13px', color: '#dc2626' }}>{error}</div>}
+      </DataCard>
+
+      {/* Lista */}
+      <DataCard title={`Categorias Cadastradas (${(categorias as any[]).length})`} action={null}>
+        {isLoading ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>Carregando...</div>
+        ) : (categorias as any[]).length === 0 ? (
+          <EmptyState icon="🏷️" title="Nenhuma categoria" description='Adicione categorias como "Inventário", "Transferência", "Logística".' />
+        ) : (
+          (categorias as any[]).map((cat: any, idx: number) => (
+            <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: idx < (categorias as any[]).length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+              {editId === cat.id ? (
+                <>
+                  <input style={{ ...inp, flex: 1, fontSize: '14px', padding: '6px 10px' }} value={editName} onChange={e => setEditName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') updateMut.mutate({ id: cat.id, name: editName }); if (e.key === 'Escape') { setEditId(null); setEditName('') } }} autoFocus />
+                  <Btn onClick={() => updateMut.mutate({ id: cat.id, name: editName })} disabled={updateMut.isPending}>Salvar</Btn>
+                  <Btn variant="outline" onClick={() => { setEditId(null); setEditName('') }}>Cancelar</Btn>
+                </>
+              ) : (
+                <>
+                  <span style={{ flex: 1, fontWeight: '600', fontSize: '14px', color: cat.isActive ? '#0f172a' : '#94a3b8' }}>
+                    {cat.name}
+                    {!cat.isActive && <span style={{ marginLeft: '8px', fontSize: '11px', background: '#f1f5f9', color: '#94a3b8', padding: '2px 8px', borderRadius: '10px' }}>Inativo</span>}
+                  </span>
+                  <Btn variant="outline" onClick={() => { setEditId(cat.id); setEditName(cat.name) }}>✏️</Btn>
+                  <Btn variant="outline" onClick={() => toggleMut.mutate({ id: cat.id, isActive: !cat.isActive })} style={{ color: cat.isActive ? '#64748b' : '#2563eb' }}>
+                    {cat.isActive ? 'Desativar' : 'Ativar'}
+                  </Btn>
+                  <Btn variant="danger" onClick={() => { if (confirm(`Excluir "${cat.name}"?`)) deleteMut.mutate({ id: cat.id }) }}>✕</Btn>
+                </>
+              )}
+            </div>
+          ))
+        )}
+      </DataCard>
+    </div>
+  )
+}
+
 // ─── Página raiz com abas ─────────────────────────────────────────────────────
-type Tab = 'viagens' | 'emandamento' | 'concluidas' | 'informativos' | 'colaboradores' | 'tipos'
+type Tab = 'viagens' | 'emandamento' | 'concluidas' | 'informativos' | 'tipos' | 'tiposdespesa'
 
 export default function ViagensPage() {
   const [tab, setTab] = useState<Tab>('viagens')
   const tabStyle = (active: boolean): React.CSSProperties => ({ padding: '9px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: active ? '700' : '500', background: active ? '#0f172a' : 'transparent', color: active ? 'white' : '#64748b', transition: 'all 0.15s' })
   return (
-    <ModulePage title="Custo de Auditoria — Viagens" description="Gerencie colaboradores, tipos de custo e cadastre viagens com prestação de contas">
+    <ModulePage title="Custo de Auditoria — Despesas" description="Gerencie colaboradores, tipos de custo e cadastre despesas com prestação de contas">
       <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '14px', width: 'fit-content', flexWrap: 'wrap' }}>
-        <button style={tabStyle(tab === 'viagens')} onClick={() => setTab('viagens')}>✈️ Viagens</button>
+        <button style={tabStyle(tab === 'viagens')} onClick={() => setTab('viagens')}>💰 Despesas</button>
         <button style={tabStyle(tab === 'emandamento')} onClick={() => setTab('emandamento')}>⏳ Em Andamento</button>
         <button style={tabStyle(tab === 'concluidas')} onClick={() => setTab('concluidas')}>✅ Concluídas</button>
         <button style={tabStyle(tab === 'informativos')} onClick={() => setTab('informativos')}>ℹ️ Custos Informativos</button>
-        <button style={tabStyle(tab === 'colaboradores')} onClick={() => setTab('colaboradores')}>👥 Colaboradores</button>
         <button style={tabStyle(tab === 'tipos')} onClick={() => setTab('tipos')}>🏷️ Tipos de Custo</button>
+        <button style={tabStyle(tab === 'tiposdespesa')} onClick={() => setTab('tiposdespesa')}>📂 Tipos de Despesa</button>
       </div>
       {tab === 'viagens' && <AbaViagens onGoEmAndamento={() => setTab('emandamento')} />}
       {tab === 'emandamento' && <AbaEmAndamento />}
       {tab === 'concluidas' && <AbaConcluidas />}
       {tab === 'informativos' && <AbaInformativos />}
-      {tab === 'colaboradores' && <AbaColaboradores />}
       {tab === 'tipos' && <AbaTiposCusto />}
+      {tab === 'tiposdespesa' && <AbaTiposDespesa />}
     </ModulePage>
   )
 }

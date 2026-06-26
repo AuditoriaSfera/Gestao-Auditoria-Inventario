@@ -312,7 +312,8 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 export default function StoresPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const [filterGestao, setFilterGestao] = useState('')
+  const [selectedGestao, setSelectedGestao] = useState<string[]>([])
+  const [gestaoDropdownOpen, setGestaoDropdownOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -325,9 +326,10 @@ export default function StoresPage() {
   const { data, isLoading } = trpc.stores.list.useQuery({
     page, pageSize: 20,
     search: search || undefined,
-    gestao: filterGestao || undefined,
+    gestaoList: selectedGestao.length > 0 ? selectedGestao : undefined,
     status: filterStatus || undefined,
   })
+  const { data: gestaoOptions } = trpc.stores.listGestao.useQuery()
 
   const createMut = trpc.stores.create.useMutation({
     onSuccess: () => { utils.stores.list.invalidate(); setShowCreate(false); setForm(emptyForm()); setError('') },
@@ -428,14 +430,43 @@ export default function StoresPage() {
             style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
           />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '0 1 160px', minWidth: '140px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '0 1 180px', minWidth: '150px', position: 'relative' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Gestão</label>
-          <input
-            placeholder="Filtrar por gestão..."
-            value={filterGestao}
-            onChange={e => { setFilterGestao(e.target.value); setPage(1) }}
-            style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '13px', outline: 'none' }}
-          />
+          <button
+            onClick={() => setGestaoDropdownOpen(o => !o)}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: selectedGestao.length > 0 ? '#eff6ff' : 'white', fontSize: '13px', cursor: 'pointer', color: selectedGestao.length > 0 ? '#2563eb' : '#374151', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', textAlign: 'left' }}
+          >
+            <span>{selectedGestao.length > 0 ? `${selectedGestao.length} selecionada${selectedGestao.length > 1 ? 's' : ''}` : 'Todas'}</span>
+            <span style={{ fontSize: '10px' }}>▾</span>
+          </button>
+          {gestaoDropdownOpen && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: '4px', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', zIndex: 50, minWidth: '180px', maxHeight: '280px', overflowY: 'auto' }}>
+              <div style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Gestão</span>
+                {selectedGestao.length > 0 && (
+                  <button onClick={() => { setSelectedGestao([]); setPage(1) }} style={{ background: 'none', border: 'none', fontSize: '11px', color: '#2563eb', cursor: 'pointer', padding: 0 }}>Limpar</button>
+                )}
+              </div>
+              {(gestaoOptions ?? []).map((g: string) => (
+                <label key={g} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', cursor: 'pointer', fontSize: '13px', color: '#374151' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <input
+                    type="checkbox"
+                    checked={selectedGestao.includes(g)}
+                    onChange={e => {
+                      setSelectedGestao(prev => e.target.checked ? [...prev, g] : prev.filter(v => v !== g))
+                      setPage(1)
+                    }}
+                  />
+                  {g}
+                </label>
+              ))}
+              {(gestaoOptions ?? []).length === 0 && (
+                <div style={{ padding: '12px', fontSize: '13px', color: '#94a3b8', textAlign: 'center' }}>Nenhuma gestão cadastrada</div>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '0 1 130px', minWidth: '110px' }}>
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Status</label>
@@ -450,9 +481,9 @@ export default function StoresPage() {
             <option value="CLOSED">Fechada</option>
           </select>
         </div>
-        {(search || filterGestao || filterStatus) && (
+        {(search || selectedGestao.length > 0 || filterStatus) && (
           <button
-            onClick={() => { setSearch(''); setFilterGestao(''); setFilterStatus(''); setPage(1) }}
+            onClick={() => { setSearch(''); setSelectedGestao([]); setFilterStatus(''); setPage(1) }}
             style={{ padding: '8px 14px', borderRadius: '8px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '13px', cursor: 'pointer', color: '#64748b', alignSelf: 'flex-end' }}
           >
             ✕ Limpar

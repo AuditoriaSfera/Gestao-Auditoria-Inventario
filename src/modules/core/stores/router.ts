@@ -10,6 +10,7 @@ export const storesRouter = createTRPCRouter({
         pageSize: z.number().default(20),
         search: z.string().optional(),
         gestao: z.string().optional(),
+        gestaoList: z.array(z.string()).optional(),
         status: z.string().optional(),
         regionId: z.string().optional(),
         groupId: z.string().optional(),
@@ -24,6 +25,12 @@ export const storesRouter = createTRPCRouter({
         .filter((s) => !s.scopeAll && s.storeId)
         .map((s) => s.storeId as string)
 
+      const effectiveGestaoList = input.gestaoList && input.gestaoList.length > 0
+        ? input.gestaoList
+        : input.gestao
+        ? [input.gestao]
+        : undefined
+
       const where: any = {
         deletedAt: null,
         ...(input.search && {
@@ -37,7 +44,7 @@ export const storesRouter = createTRPCRouter({
             { managerName: { contains: input.search, mode: 'insensitive' } },
           ],
         }),
-        ...(input.gestao && { gestao: { contains: input.gestao, mode: 'insensitive' } }),
+        ...(effectiveGestaoList && { gestao: { in: effectiveGestaoList } }),
         ...(input.status && { status: input.status }),
         ...(input.regionId && { regionId: input.regionId }),
         ...(!hasAllStores && { id: { in: scopedStoreIds } }),
@@ -58,6 +65,16 @@ export const storesRouter = createTRPCRouter({
 
       return { stores, meta: buildPaginationMeta(total, input.page, input.pageSize) }
     }),
+
+  listGestao: protectedProcedure.query(async ({ ctx }) => {
+    const stores = await ctx.db.store.findMany({
+      where: { deletedAt: null, gestao: { not: null } },
+      select: { gestao: true },
+      distinct: ['gestao'],
+      orderBy: { gestao: 'asc' },
+    })
+    return stores.map((s) => s.gestao as string).filter(Boolean)
+  }),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))

@@ -12,6 +12,7 @@ const STATUS_LABELS: Record<string, string> = { OPEN: 'Aberta', CLOSED: 'Fechada
 const PAYMENT_METHODS = ['Adiantamento','Cartão Corporativo','Cartão Combustível','Pix','Dinheiro','Reembolso']
 const DIAS_SEMANA = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
 const DEFAULT_COST_TYPES = ['Alimentação','Hospedagem','Combustível','Pedágio','Estacionamento','Passagem','Aluguel de carro','Carro de aplicativo','Outros']
+const EXPENSE_TAGS = ['Conserto Scanner','Inventário - sem viagem','Logística','Transferência','Viagem']
 
 function costCenterIcon(name: string): string {
   const n = (name ?? '').toLowerCase()
@@ -2459,6 +2460,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   })()
   const initStoreNames: string[] = initialData?.storeName ? initialData.storeName.split(',').map((s: string) => s.trim()).filter(Boolean) : []
   const initAttachments: string[] = (() => { try { return initialData?.attachmentUrls ? JSON.parse(initialData.attachmentUrls) : [] } catch { return [] } })()
+  const initExpenseTags: string[] = (() => { try { return initialData?.expenseTags ? JSON.parse(initialData.expenseTags) : [] } catch { return [] } })()
 
   const [form, setForm] = useState({
     costCenterName: initialData?.costCenterName ?? '',
@@ -2469,6 +2471,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
   })
   const [selectedCollabIds, setSelectedCollabIds] = useState<string[]>(initCollabIds)
   const [selectedStoreNames, setSelectedStoreNames] = useState<string[]>(initStoreNames)
+  const [selectedExpenseTags, setSelectedExpenseTags] = useState<string[]>(initExpenseTags)
   const [attachments, setAttachments] = useState<string[]>(initAttachments)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -2498,6 +2501,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
     if (!form.costCenterName) { setError('Selecione o centro de custo.'); return }
     if (!form.date) { setError('Informe a data.'); return }
     if (!form.value || isNaN(Number(form.value.replace(',', '.')))) { setError('Informe o valor.'); return }
+    if (!selectedExpenseTags.length) { setError('Selecione ao menos um Tipo de Despesa.'); return }
     if (!itemId && !attachments.length) { setError('Adicione ao menos um comprovante.'); return }
     setError('')
     setSaving(true)
@@ -2513,6 +2517,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
           collaboratorIds: selectedCollabIds,
           value:           Number(form.value.replace(',', '.')),
           paymentMethod:   form.paymentMethod || null,
+          expenseTags:     selectedExpenseTags,
           attachmentUrls:  attachments,
         })
       } else {
@@ -2525,6 +2530,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
           collaboratorIds: selectedCollabIds.length ? selectedCollabIds : undefined,
           value:           Number(form.value.replace(',', '.')),
           paymentMethod:   form.paymentMethod || undefined,
+          expenseTags:     selectedExpenseTags,
           attachmentUrls:  attachments.length ? attachments : undefined,
         })
       }
@@ -2586,6 +2592,24 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
 
       <Field label="Motivo">
         <textarea style={{ ...inp, minHeight: '60px', resize: 'vertical' }} value={form.reason} onChange={e => set('reason', e.target.value)} placeholder="Descreva o motivo do custo..." />
+      </Field>
+
+      <Field label="Tipo de Despesa *" hint="Selecione uma ou mais categorias">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '2px' }}>
+          {EXPENSE_TAGS.map(tag => {
+            const selected = selectedExpenseTags.includes(tag)
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setSelectedExpenseTags(prev => selected ? prev.filter(t => t !== tag) : [...prev, tag])}
+                style={{ padding: '6px 14px', borderRadius: '20px', border: `1.5px solid ${selected ? '#2563eb' : '#d1d5db'}`, background: selected ? '#eff6ff' : 'white', color: selected ? '#1d4ed8' : '#374151', fontSize: '13px', fontWeight: selected ? '600' : '400', cursor: 'pointer', transition: 'all 0.15s' }}
+              >
+                {tag}
+              </button>
+            )
+          })}
+        </div>
       </Field>
 
       <Field label="Forma de Pagamento">

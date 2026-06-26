@@ -54,16 +54,18 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       collaboratorIds: z.array(z.string()).optional(),
       value:           z.number().min(0),
       paymentMethod:   z.string().optional(),
+      expenseTags:     z.array(z.string()).min(1, 'Selecione ao menos um Tipo de Despesa'),
       attachmentUrls:  z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { attachmentUrls, collaboratorIds, collaboratorId, ...rest } = input
+      const { attachmentUrls, collaboratorIds, collaboratorId, expenseTags, ...rest } = input
       const primaryCollabId = collaboratorId || collaboratorIds?.[0] || undefined
       return ctx.db.auditInformativeCost.create({
         data: {
           ...rest,
           collaboratorId:  primaryCollabId,
           collaboratorIds: collaboratorIds?.length ? JSON.stringify(collaboratorIds) : null,
+          expenseTags:     JSON.stringify(expenseTags),
           attachmentUrls:  attachmentUrls?.length ? JSON.stringify(attachmentUrls) : null,
           auditorId:  ctx.session.user.id,
           createdBy:  ctx.session.user.id,
@@ -82,10 +84,11 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       collaboratorIds: z.array(z.string()).optional(),
       value:           z.number().min(0).optional(),
       paymentMethod:   z.string().optional().nullable(),
+      expenseTags:     z.array(z.string()).optional(),
       attachmentUrls:  z.array(z.string()).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { id, attachmentUrls, collaboratorIds, collaboratorId, ...rest } = input
+      const { id, attachmentUrls, collaboratorIds, collaboratorId, expenseTags, ...rest } = input
       const primaryCollabId = collaboratorId !== undefined
         ? (collaboratorId || (collaboratorIds?.[0] ?? null))
         : undefined
@@ -95,6 +98,7 @@ export const auditInformativeCostsRouter = createTRPCRouter({
           ...rest,
           ...(primaryCollabId !== undefined && { collaboratorId: primaryCollabId }),
           ...(collaboratorIds !== undefined && { collaboratorIds: collaboratorIds.length ? JSON.stringify(collaboratorIds) : null }),
+          ...(expenseTags     !== undefined && { expenseTags:     expenseTags.length     ? JSON.stringify(expenseTags)     : null }),
           ...(attachmentUrls  !== undefined && { attachmentUrls:  attachmentUrls.length  ? JSON.stringify(attachmentUrls)  : null }),
         },
       })

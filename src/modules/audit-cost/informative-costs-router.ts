@@ -12,6 +12,9 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       startDate: z.date().optional(),
       endDate: z.date().optional(),
       search: z.string().optional(),
+      costCenterName: z.string().optional(),
+      storeName: z.string().optional(),
+      categoria: z.string().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const { skip, take } = paginate(input.page, input.pageSize)
@@ -19,6 +22,9 @@ export const auditInformativeCostsRouter = createTRPCRouter({
         deletedAt: null,
         ...(input.tripId && { tripId: input.tripId }),
         ...(input.collaboratorId && { collaboratorId: input.collaboratorId }),
+        ...(input.costCenterName && { costCenterName: input.costCenterName }),
+        ...(input.storeName && { storeName: { contains: input.storeName, mode: 'insensitive' } }),
+        ...(input.categoria && { categorias: { contains: input.categoria, mode: 'insensitive' } }),
         ...(input.startDate || input.endDate ? { date: {
           ...(input.startDate && { gte: input.startDate }),
           ...(input.endDate   && { lte: input.endDate }),
@@ -32,7 +38,7 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       }
       const [items, total] = await Promise.all([
         ctx.db.auditInformativeCost.findMany({
-          where, skip, take, orderBy: [{ date: 'desc' }, { createdAt: 'asc' }],
+          where, skip, take, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
           include: {
             collaborator: { select: { id: true, name: true, role: true } },
             trip: { select: { id: true, reason: true, stores: true, startDate: true, endDate: true } },
@@ -56,6 +62,7 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       paymentMethod:   z.string().optional(),
       expenseTags:     z.array(z.string()).min(1, 'Selecione ao menos um Tipo de Despesa'),
       attachmentUrls:  z.array(z.string()).optional(),
+      categorias:      z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { attachmentUrls, collaboratorIds, collaboratorId, expenseTags, ...rest } = input
@@ -86,6 +93,7 @@ export const auditInformativeCostsRouter = createTRPCRouter({
       paymentMethod:   z.string().optional().nullable(),
       expenseTags:     z.array(z.string()).optional(),
       attachmentUrls:  z.array(z.string()).optional(),
+      categorias:      z.string().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, attachmentUrls, collaboratorIds, collaboratorId, expenseTags, ...rest } = input

@@ -2616,7 +2616,7 @@ function NovoCustoInformativoModal({ onClose, onCreated, collabsList, costTypes,
         </div>
       </Field>
 
-      <Field label="Forma de Pagamento">
+      <Field label="Forma de Pagamento *">
         <input style={inp} value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} placeholder="Ex: Pix, Cartão, Dinheiro..." />
       </Field>
 
